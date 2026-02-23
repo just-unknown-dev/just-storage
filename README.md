@@ -1,8 +1,14 @@
-# just_storage
+# Just Storage
 
 A Flutter package providing **standard** and **secure** key-value storage with typed JSON helpers and reactive watch streams — via `JustStandardStorage` and `JustSecureStorage`.
 
 Both implementations are built from scratch using only `dart:io`, `path_provider` (for directory resolution), and `pointycastle` (AES-256-GCM encryption). No third-party storage wrappers (`shared_preferences`, `flutter_secure_storage`, etc.) are used.
+
+[![pub package](https://img.shields.io/pub/v/just_storage.svg)](https://pub.dev/packages/just_storage)
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](LICENSE)
+[![Contributing](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+> Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before opening an issue or pull request.
 
 ---
 
