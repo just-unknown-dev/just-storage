@@ -1,0 +1,174 @@
+import 'dart:async';
+import 'dart:convert';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' show window;
+
+import '../just_standard_storage.dart';
+import '../models/storage_exception.dart';
+
+/// [JustStandardStorage] implementation for web, backed by the browser's
+/// `window.localStorage`.
+///
+/// All values are stored under keys prefixed with `just_storage:` to avoid
+/// collisions with other libraries or the app itself.
+///
+/// Obtain an instance via the factory:
+/// ```dart
+/// final JustStandardStorage storage = await JustStorage.standard();
+/// ```
+class WebStorage implements JustStandardStorage {
+  static const String _prefix = 'just_storage:';
+
+  final Map<String, StreamController<String?>> _controllers = {};
+
+  String _prefixed(String key) => '$_prefix$key';
+
+  StreamController<String?> _controllerFor(String key) {
+    return _controllers.putIfAbsent(
+      key,
+      () => StreamController<String?>.broadcast(sync: true),
+    );
+  }
+
+  void _emit(String key, String? value) {
+    if (_controllers.containsKey(key)) {
+      _controllers[key]!.add(value);
+    }
+  }
+
+  @override
+  Future<String?> read(String key) async {
+    return window.localStorage[_prefixed(key)];
+  }
+
+  @override
+  Future<void> write(String key, String value) async {
+    try {
+      window.localStorage[_prefixed(key)] = value;
+      _emit(key, value);
+    } catch (e) {
+      throw StorageException('Failed to write key "$key".', cause: e);
+    }
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    try {
+      window.localStorage.remove(_prefixed(key));
+      _emit(key, null);
+    } catch (e) {
+      throw StorageException('Failed to delete key "$key".', cause: e);
+    }
+  }
+
+  @override
+  Future<void> clear() async {
+    try {
+      final keysToRemove =
+          window.localStorage.keys.where((k) => k.startsWith(_prefix)).toList();
+      for (final k in keysToRemove) {
+        final shortKey = k.substring(_prefix.length);
+        window.localStorage.remove(k);
+        _emit(shortKey, null);
+      }
+    } catch (e) {
+      throw StorageException('Failed to clear storage.', cause: e);
+    }
+  }
+
+  @override
+  Future<bool> containsKey(String key) async {
+    return window.localStorage.containsKey(_prefixed(key));
+  }
+
+  @override
+  Future<Map<String, String>> readAll() async {
+    final result = <String, String>{};
+    for (final entry in window.localStorage.entries) {
+      if (entry.key.startsWith(_prefix)) {
+        result[entry.key.substring(_prefix.length)] = entry.value;
+      }
+    }
+    return Map.unmodifiable(result);
+  }
+
+  @override
+  Future<T?> readJson<T>(
+    String key,
+    T Function(Map<String, dynamic> json) fromJson,
+  ) async {
+    try {
+      final raw = window.localStorage[_prefixed(key)];
+      if (raw == null) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        throw StorageException(
+          'Stored value for key "$key" is not a JSON object.',
+        );
+      }
+      return fromJson(decoded);
+    } on StorageException {
+      rethrow;
+    } catch (e) {
+      throw StorageException('Failed to read JSON for key "$key".', cause: e);
+    }
+  }
+
+  @override
+  Future<void> writeJson<T>(
+    String key,
+    T value,
+    Map<String, dynamic> Function(T value) toJson,
+  ) async {
+    try {
+      final encoded = jsonEncode(toJson(value));
+      await write(key, encoded);
+    } on StorageException {
+      rethrow;
+    } catch (e) {
+      throw StorageException('Failed to write JSON for key "$key".', cause: e);
+    }
+  }
+
+  @override
+  Stream<String?> watch(String key) {
+    final buffered = <String?>[];
+    bool snapshotEmitted = false;
+
+    late StreamController<String?> sc;
+    late StreamSubscription<String?> innerSub;
+
+    sc = StreamController<String?>(
+      sync: true,
+      onListen: () {
+        innerSub = _controllerFor(key).stream.listen((value) {
+          if (snapshotEmitted) {
+            sc.add(value);
+          } else {
+            buffered.add(value);
+          }
+        });
+
+        if (!sc.isClosed) {
+          sc.add(window.localStorage[_prefixed(key)]);
+          snapshotEmitted = true;
+          for (final v in buffered) {
+            sc.add(v);
+          }
+          buffered.clear();
+        }
+      },
+      onCancel: () => innerSub.cancel(),
+    );
+
+    return sc.stream;
+  }
+
+  /// Disposes all open stream controllers and releases resources.
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.close();
+    }
+    _controllers.clear();
+  }
+}
