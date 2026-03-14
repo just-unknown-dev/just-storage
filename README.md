@@ -2,7 +2,7 @@
 
 A Flutter package providing **standard** and **secure** key-value storage with typed JSON helpers and reactive watch streams — via `JustStandardStorage` and `JustSecureStorage`.
 
-Both implementations are built from scratch using only `dart:io`, `path_provider` (for directory resolution), and `pointycastle` (AES-256-GCM encryption). No third-party storage wrappers (`shared_preferences`, `flutter_secure_storage`, etc.) are used.
+Built from scratch with no third-party storage wrappers (`shared_preferences`, `flutter_secure_storage`, etc.). On native platforms (Android, iOS, macOS, Linux, Windows) storage is backed by `dart:io` files; on web it uses the browser's `localStorage` — the same `JustStorage` factory selects the right backend automatically.
 
 [![pub package](https://img.shields.io/pub/v/just_storage.svg)](https://pub.dev/packages/just_storage)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](LICENSE)
@@ -17,13 +17,15 @@ Both implementations are built from scratch using only `dart:io`, `path_provider
 | | `JustStandardStorage` | `JustSecureStorage` |
 |---|---|---|
 | **Use case** | Non-sensitive app data (settings, preferences, game state) | Sensitive data (auth tokens, credentials, PII) |
-| **Storage** | Atomic JSON file via `dart:io` | AES-256-GCM encrypted JSON file |
+| **Native backend** | Atomic JSON file via `dart:io` | AES-256-GCM encrypted JSON file |
+| **Web backend** | `window.localStorage` (prefixed keys) | `window.localStorage` with AES-256-GCM |
 | **Encryption** | None | AES-256-GCM with per-value random nonces |
 | **Integrity check** | No | Yes — GCM auth tag rejects any tampered byte |
 | **Persistence** | ✅ | ✅ |
 | **Typed JSON helpers** | ✅ | ✅ |
 | **Reactive `watch()` stream** | ✅ | ✅ |
-| **Atomic writes** | ✅ (rename-swap) | ✅ (rename-swap) |
+| **Atomic writes** | ✅ native (rename-swap) / ✅ web (sync) | ✅ native (rename-swap) / ✅ web (sync) |
+| **Admin UI** | ✅ via `package:just_storage/ui.dart` | ✅ via `package:just_storage/ui.dart` |
 
 ---
 
@@ -33,7 +35,7 @@ Add the package to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  just_storage: ^1.0.0
+  just_storage: ^1.1.0
 ```
 
 Use [JustStorage] to obtain instances — no `path_provider` import required in your app:
@@ -115,9 +117,51 @@ Both types share the **same method surface** — the only difference is what hap
 
 ---
 
+## Admin UI
+
+`just_storage` ships a built-in Flutter admin screen for inspecting and editing storage at runtime.  Import it from the separate `ui.dart` library to keep the UI dependencies optional:
+
+```dart
+import 'package:just_storage/ui.dart';
+
+// Push the screen (creates its own storage instances automatically)
+Navigator.of(context).push(MaterialPageRoute(
+  builder: (_) => const JUStorageAdminScreen(),
+));
+```
+
+Pass your own instances to inspect a specific directory or `localStorage` namespace:
+
+```dart
+JUStorageAdminScreen(
+  standard: myStandardStorage,
+  secure:   mySecureStorage,
+)
+```
+
+Optionally supply a custom theme:
+
+```dart
+JUStorageAdminScreen(
+  theme: ThemeData(colorSchemeSeed: Colors.teal),
+)
+```
+
+The screen contains three tabs:
+
+| Tab | Description |
+|-----|-------------|
+| **Standard** | Browse, search, add, edit, and delete plain key-value entries |
+| **Secure** | Same operations for AES-256-GCM encrypted entries |
+| **Info** | Entry counts, backend details, and danger-zone clear actions |
+
+---
+
 ## Security model
 
-### Encryption
+### Native platforms (Android, iOS, macOS, Linux, Windows)
+
+#### Encryption
 
 `EncryptedFileStorage` uses **AES-256-GCM** (authenticated encryption) via the `pointycastle` package:
 
@@ -127,7 +171,7 @@ Both types share the **same method surface** — the only difference is what hap
 - **Auth tag**: 128 bits appended to every ciphertext — any modification to the file throws `StorageException` before any plaintext is returned
 - **Each value independently encrypted**: compromising one entry's nonce does not affect others
 
-### Master key
+#### Master key
 
 The master key is stored in `<appSupportDir>/.storage.key`:
 
@@ -135,7 +179,7 @@ The master key is stored in `<appSupportDir>/.storage.key`:
 - File permissions set to `0600` (owner-read-only) on POSIX platforms (Android, iOS, Linux, macOS)
 - Protected by the OS app sandbox — inaccessible to other apps on Android (API 29+) and iOS without root
 
-### On-disk format
+#### On-disk format
 
 ```json
 {
@@ -144,9 +188,15 @@ The master key is stored in `<appSupportDir>/.storage.key`:
 }
 ```
 
-### Atomic writes
+#### Atomic writes
 
 Both implementations write to a `.tmp` file first, then call `File.rename()` — an atomic OS-level swap on all supported platforms. A crash mid-write never corrupts the existing store.
+
+### Web platform
+
+`WebSecureStorage` uses the same **AES-256-GCM** algorithm via `pointycastle`. The master key is generated on first use with `Random.secure()` and stored in `localStorage` under a reserved key.
+
+> **Note**: `localStorage` is accessible to all scripts running on the same origin. The security guarantee is equivalent to in-memory protection rather than OS-level sandboxing. Prefer a server-side solution for highly sensitive data in web applications.
 
 ---
 
