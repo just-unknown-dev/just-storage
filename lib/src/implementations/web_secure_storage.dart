@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' show window;
 import 'dart:math';
 import 'dart:typed_data';
+
+import 'package:web/web.dart' as web;
 
 import '../just_secure_storage.dart';
 import '../models/storage_exception.dart';
@@ -44,7 +44,7 @@ class WebSecureStorage implements JustSecureStorage {
   String _prefixed(String key) => '$_dataPrefix$key';
 
   Uint8List _loadOrCreateKey() {
-    final stored = window.localStorage[_masterKeyEntry];
+    final stored = web.window.localStorage.getItem(_masterKeyEntry);
     if (stored != null) {
       final bytes = base64.decode(stored);
       if (bytes.length != _keyLength) {
@@ -60,7 +60,7 @@ class WebSecureStorage implements JustSecureStorage {
     final key = Uint8List.fromList(
       List<int>.generate(_keyLength, (_) => rng.nextInt(256)),
     );
-    window.localStorage[_masterKeyEntry] = base64.encode(key);
+    web.window.localStorage.setItem(_masterKeyEntry, base64.encode(key));
     return key;
   }
 
@@ -73,11 +73,15 @@ class WebSecureStorage implements JustSecureStorage {
 
   Map<String, String> _loadCache() {
     final result = <String, String>{};
-    for (final entry in window.localStorage.entries) {
-      if (!entry.key.startsWith(_dataPrefix)) continue;
-      final shortKey = entry.key.substring(_dataPrefix.length);
+    final ls = web.window.localStorage;
+    for (var i = 0; i < ls.length; i++) {
+      final k = ls.key(i);
+      if (k == null || !k.startsWith(_dataPrefix)) continue;
+      final shortKey = k.substring(_dataPrefix.length);
+      final rawValue = ls.getItem(k);
+      if (rawValue == null) continue;
       try {
-        final outer = jsonDecode(entry.value);
+        final outer = jsonDecode(rawValue);
         if (outer is! Map) continue;
 
         final nonce = base64.decode(outer['n'] as String);
@@ -106,7 +110,7 @@ class WebSecureStorage implements JustSecureStorage {
       'n': base64.encode(nonce),
       'ct': base64.encode(ct),
     });
-    window.localStorage[_prefixed(key)] = payload;
+    web.window.localStorage.setItem(_prefixed(key), payload);
   }
 
   StreamController<String?> _controllerFor(String key) {
@@ -151,7 +155,7 @@ class WebSecureStorage implements JustSecureStorage {
     try {
       _ensureInit();
       _cache!.remove(key);
-      window.localStorage.remove(_prefixed(key));
+      web.window.localStorage.removeItem(_prefixed(key));
       _emit(key, null);
     } on StorageException {
       rethrow;
@@ -166,11 +170,14 @@ class WebSecureStorage implements JustSecureStorage {
       _ensureInit();
       final keys = List<String>.from(_cache!.keys);
       _cache!.clear();
-      final lsKeysToRemove = window.localStorage.keys
-          .where((k) => k.startsWith(_dataPrefix))
-          .toList();
+      final ls = web.window.localStorage;
+      final lsKeysToRemove = <String>[];
+      for (var i = 0; i < ls.length; i++) {
+        final k = ls.key(i);
+        if (k != null && k.startsWith(_dataPrefix)) lsKeysToRemove.add(k);
+      }
       for (final k in lsKeysToRemove) {
-        window.localStorage.remove(k);
+        ls.removeItem(k);
       }
       for (final k in keys) {
         _emit(k, null);

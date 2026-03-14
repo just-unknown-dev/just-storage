@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' show window;
+import 'package:web/web.dart' as web;
 
 import '../just_standard_storage.dart';
 import '../models/storage_exception.dart';
@@ -38,13 +37,13 @@ class WebStorage implements JustStandardStorage {
 
   @override
   Future<String?> read(String key) async {
-    return window.localStorage[_prefixed(key)];
+    return web.window.localStorage.getItem(_prefixed(key));
   }
 
   @override
   Future<void> write(String key, String value) async {
     try {
-      window.localStorage[_prefixed(key)] = value;
+      web.window.localStorage.setItem(_prefixed(key), value);
       _emit(key, value);
     } catch (e) {
       throw StorageException('Failed to write key "$key".', cause: e);
@@ -54,7 +53,7 @@ class WebStorage implements JustStandardStorage {
   @override
   Future<void> delete(String key) async {
     try {
-      window.localStorage.remove(_prefixed(key));
+      web.window.localStorage.removeItem(_prefixed(key));
       _emit(key, null);
     } catch (e) {
       throw StorageException('Failed to delete key "$key".', cause: e);
@@ -64,11 +63,15 @@ class WebStorage implements JustStandardStorage {
   @override
   Future<void> clear() async {
     try {
-      final keysToRemove =
-          window.localStorage.keys.where((k) => k.startsWith(_prefix)).toList();
+      final ls = web.window.localStorage;
+      final keysToRemove = <String>[];
+      for (var i = 0; i < ls.length; i++) {
+        final k = ls.key(i);
+        if (k != null && k.startsWith(_prefix)) keysToRemove.add(k);
+      }
       for (final k in keysToRemove) {
         final shortKey = k.substring(_prefix.length);
-        window.localStorage.remove(k);
+        ls.removeItem(k);
         _emit(shortKey, null);
       }
     } catch (e) {
@@ -78,15 +81,18 @@ class WebStorage implements JustStandardStorage {
 
   @override
   Future<bool> containsKey(String key) async {
-    return window.localStorage.containsKey(_prefixed(key));
+    return web.window.localStorage.getItem(_prefixed(key)) != null;
   }
 
   @override
   Future<Map<String, String>> readAll() async {
     final result = <String, String>{};
-    for (final entry in window.localStorage.entries) {
-      if (entry.key.startsWith(_prefix)) {
-        result[entry.key.substring(_prefix.length)] = entry.value;
+    final ls = web.window.localStorage;
+    for (var i = 0; i < ls.length; i++) {
+      final k = ls.key(i);
+      if (k != null && k.startsWith(_prefix)) {
+        final v = ls.getItem(k);
+        if (v != null) result[k.substring(_prefix.length)] = v;
       }
     }
     return Map.unmodifiable(result);
@@ -98,7 +104,7 @@ class WebStorage implements JustStandardStorage {
     T Function(Map<String, dynamic> json) fromJson,
   ) async {
     try {
-      final raw = window.localStorage[_prefixed(key)];
+      final raw = web.window.localStorage.getItem(_prefixed(key));
       if (raw == null) return null;
       final decoded = jsonDecode(raw);
       if (decoded is! Map<String, dynamic>) {
@@ -150,7 +156,7 @@ class WebStorage implements JustStandardStorage {
         });
 
         if (!sc.isClosed) {
-          sc.add(window.localStorage[_prefixed(key)]);
+          sc.add(web.window.localStorage.getItem(_prefixed(key)));
           snapshotEmitted = true;
           for (final v in buffered) {
             sc.add(v);

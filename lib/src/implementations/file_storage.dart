@@ -19,6 +19,10 @@ import '../models/storage_exception.dart';
 /// final JustStandardStorage storage = await JustStorage.standard();
 /// ```
 class FileStorage implements JustStandardStorage {
+  /// Creates a [FileStorage] that reads and writes a plain JSON file
+  /// inside [_directory].
+  ///
+  /// Prefer [JustStorage.standard] over calling this constructor directly.
   FileStorage(this._directory);
 
   final Directory _directory;
