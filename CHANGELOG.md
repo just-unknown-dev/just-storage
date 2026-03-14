@@ -1,3 +1,11 @@
+## [1.1.2] - 2026-03-14
+
+### Changed
+
+- **README** — added a *Comparison with similar packages* section with a feature matrix table contrasting `just_storage` against `shared_preferences`, `flutter_secure_storage`, and `hive`, plus guidance on when to choose each package.
+
+---
+
 ## [1.1.1] - 2026-03-14
 
 ### Fixed
