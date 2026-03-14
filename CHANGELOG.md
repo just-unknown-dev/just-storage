@@ -1,3 +1,17 @@
+## [1.1.1] - 2026-03-14
+
+### Fixed
+
+- **WASM compatibility** — replaced `dart:html` imports in `WebStorage` and `WebSecureStorage` with `package:web` (`web: ^1.0.0`); changed all conditional export guards from `dart.library.html` to `dart.library.js_interop`, which is available on both JS web and WASM targets.  The package is now compatible with `dart compile wasm` and Flutter WASM builds.
+
+- **Missing documentation warnings** — added doc comments to the previously undocumented constructors: `EncryptedFileStorage.new`, `FileStorage.new`, `JustSecureStorage.new`, `JustStandardStorage.new`, and `StorageException.new`.  Resolves the `missing_code_block_language_in_doc_comment` / pub.dev documentation score warnings.
+
+### Changed
+
+- **Example** (`example/example.dart`) — Example page added to demonstrate basic usage of `JustStorage` in a Flutter app, including reading/writing values, using the reactive `watch()` stream, and displaying the admin UI.
+
+---
+
 ## [1.1.0] - 2026-03-14
 
 ### Added

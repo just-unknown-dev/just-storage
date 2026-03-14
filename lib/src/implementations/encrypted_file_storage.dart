@@ -37,6 +37,10 @@ import '../security/storage_key_manager.dart';
 /// final JustSecureStorage secure = await JustStorage.encrypted();
 /// ```
 class EncryptedFileStorage implements JustSecureStorage {
+  /// Creates an [EncryptedFileStorage] that reads and writes an AES-256-GCM
+  /// encrypted JSON file inside [_directory].
+  ///
+  /// Prefer [JustStorage.encrypted] over calling this constructor directly.
   EncryptedFileStorage(this._directory)
       : _keyManager = StorageKeyManager(_directory),
         _cipher = AesGcmCipher();

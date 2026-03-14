@@ -19,6 +19,9 @@
 /// );
 /// ```
 abstract class JustSecureStorage {
+  /// Default constructor for subclasses.
+  const JustSecureStorage();
+
   /// Returns the raw string stored under [key], or `null` if absent.
   Future<String?> read(String key);
 
