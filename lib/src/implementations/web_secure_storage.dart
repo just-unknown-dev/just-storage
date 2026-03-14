@@ -1,139 +1,116 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
+
+import 'package:web/web.dart' as web;
 
 import '../just_secure_storage.dart';
 import '../models/storage_exception.dart';
 import '../security/aes_gcm_cipher.dart';
-import '../security/storage_key_manager.dart';
 
-/// [JustSecureStorage] implementation that encrypts every value with AES-256-GCM.
-/// No third-party storage packages are used.
+/// [JustSecureStorage] implementation for web, backed by the browser's
+/// `window.localStorage` with AES-256-GCM authenticated encryption.
 ///
-/// ### On-disk format
-/// A single JSON file `<directory>/just_secure_storage.enc` with the shape:
-/// ```json
-/// {
-///   "access_token": { "n": "<base64 nonce>", "ct": "<base64 ctag>" },
-///   "refresh_token": { "n": "<base64 nonce>", "ct": "<base64 ctag>" }
-/// }
-/// ```
-/// Each value is **independently** encrypted with a fresh random 12-byte
-/// nonce, so a nonce collision for one entry never compromises another.
-/// The `"ct"` field is `ciphertext || 16-byte GCM auth tag`; any bit-flip is
-/// detected and rejected before plaintext is returned.
+/// The master key is generated on first use and stored in `localStorage`
+/// under a reserved key.  All data entries are stored encrypted under keys
+/// prefixed with `just_secure:`.
 ///
-/// ### Master key
-/// Managed by [StorageKeyManager].  The key lives at
-/// `<directory>/.storage.key` (owner-read-only on POSIX).
-///
-/// ### Atomicity
-/// Mutations are written to `<name>.tmp` then renamed over the target —
-/// an atomic OS-level swap on all supported platforms.
+/// **Note:** Because `localStorage` is accessible to all scripts running on
+/// the same origin, the security guarantee is equivalent to in-memory
+/// protection rather than OS-level sandboxing.  Prefer a server-side solution
+/// for highly sensitive data in web applications.
 ///
 /// Obtain an instance via the factory:
 /// ```dart
 /// final JustSecureStorage secure = await JustStorage.encrypted();
 /// ```
-class EncryptedFileStorage implements JustSecureStorage {
-  /// Creates an [EncryptedFileStorage] that reads and writes an AES-256-GCM
-  /// encrypted JSON file inside [_directory].
-  ///
-  /// Prefer [JustStorage.encrypted] over calling this constructor directly.
-  EncryptedFileStorage(this._directory)
-      : _keyManager = StorageKeyManager(_directory),
-        _cipher = AesGcmCipher();
+class WebSecureStorage implements JustSecureStorage {
+  static const String _dataPrefix = 'just_secure:';
+  static const String _masterKeyEntry = 'just_secure_key:__master__';
+  static const int _keyLength = 32; // 256-bit
 
-  final Directory _directory;
-  final StorageKeyManager _keyManager;
-  final AesGcmCipher _cipher;
+  final AesGcmCipher _cipher = AesGcmCipher();
 
-  static const String _fileName = 'just_secure_storage.enc';
-
-  /// Plaintext in-memory cache: `key → plaintext value`.
-  Map<String, String>? _cache;
   Uint8List? _masterKey;
-  Future<void>? _initFuture;
+  Map<String, String>? _cache;
+
   final Map<String, StreamController<String?>> _controllers = {};
 
   // --------------------------------------------------------------------------
   // Internals
   // --------------------------------------------------------------------------
 
-  File get _dataFile =>
-      File('${_directory.path}${Platform.pathSeparator}$_fileName');
+  String _prefixed(String key) => '$_dataPrefix$key';
 
-  File get _tmpFile =>
-      File('${_directory.path}${Platform.pathSeparator}$_fileName.tmp');
-
-  /// Guards against concurrent initialisation: all callers await the same
-  /// Future so `_doInit` body runs exactly once.
-  Future<void> _init() => _initFuture ??= _doInit();
-
-  Future<void> _doInit() async {
-    _masterKey ??= await _keyManager.loadOrCreate();
-
-    final file = _dataFile;
-    if (!await file.exists()) {
-      _cache = {};
-      return;
+  Uint8List _loadOrCreateKey() {
+    final stored = web.window.localStorage.getItem(_masterKeyEntry);
+    if (stored != null) {
+      final bytes = base64.decode(stored);
+      if (bytes.length != _keyLength) {
+        throw StorageException(
+          'Stored web master key is corrupt: expected $_keyLength bytes, '
+          'got ${bytes.length}.',
+        );
+      }
+      return Uint8List.fromList(bytes);
     }
 
-    try {
-      final raw = await file.readAsString();
-      final outer = jsonDecode(raw);
-      if (outer is! Map) {
-        _cache = {};
-        return;
-      }
+    final rng = Random.secure();
+    final key = Uint8List.fromList(
+      List<int>.generate(_keyLength, (_) => rng.nextInt(256)),
+    );
+    web.window.localStorage.setItem(_masterKeyEntry, base64.encode(key));
+    return key;
+  }
 
-      final result = <String, String>{};
-      for (final entry in outer.entries) {
-        final k = entry.key as String;
-        final v = entry.value;
-        if (v is! Map) continue;
+  void _ensureInit() {
+    if (_masterKey != null && _cache != null) return;
 
-        final nonce = base64.decode(v['n'] as String);
-        final ct = base64.decode(v['ct'] as String);
+    _masterKey = _loadOrCreateKey();
+    _cache = _loadCache();
+  }
+
+  Map<String, String> _loadCache() {
+    final result = <String, String>{};
+    final ls = web.window.localStorage;
+    for (var i = 0; i < ls.length; i++) {
+      final k = ls.key(i);
+      if (k == null || !k.startsWith(_dataPrefix)) continue;
+      final shortKey = k.substring(_dataPrefix.length);
+      final rawValue = ls.getItem(k);
+      if (rawValue == null) continue;
+      try {
+        final outer = jsonDecode(rawValue);
+        if (outer is! Map) continue;
+
+        final nonce = base64.decode(outer['n'] as String);
+        final ct = base64.decode(outer['ct'] as String);
         final plainBytes = _cipher.decrypt(
           _masterKey!,
           Uint8List.fromList(nonce),
           Uint8List.fromList(ct),
         );
-        result[k] = utf8.decode(plainBytes);
+        result[shortKey] = utf8.decode(plainBytes);
+      } catch (_) {
+        // Skip any corrupted entry.
       }
-      _cache = result;
-    } catch (e) {
-      if (e is StorageException) rethrow;
-      throw StorageException(
-        'Failed to load encrypted storage file.',
-        cause: e,
-      );
     }
+    return result;
   }
 
-  Future<void> _flush() async {
-    await _directory.create(recursive: true);
-    _masterKey ??= await _keyManager.loadOrCreate();
-
-    final outer = <String, Map<String, String>>{};
-    for (final entry in _cache!.entries) {
-      final nonce = AesGcmCipher.randomNonce();
-      final ct = _cipher.encrypt(
-        _masterKey!,
-        nonce,
-        Uint8List.fromList(utf8.encode(entry.value)),
-      );
-      outer[entry.key] = {
-        'n': base64.encode(nonce),
-        'ct': base64.encode(ct),
-      };
-    }
-
-    final tmp = _tmpFile;
-    await tmp.writeAsString(jsonEncode(outer), flush: true);
-    await tmp.rename(_dataFile.path);
+  void _flushEntry(String key, String plaintext) {
+    final nonce = AesGcmCipher.randomNonce();
+    final ct = _cipher.encrypt(
+      _masterKey!,
+      nonce,
+      Uint8List.fromList(utf8.encode(plaintext)),
+    );
+    final payload = jsonEncode({
+      'n': base64.encode(nonce),
+      'ct': base64.encode(ct),
+    });
+    web.window.localStorage.setItem(_prefixed(key), payload);
   }
 
   StreamController<String?> _controllerFor(String key) {
@@ -150,21 +127,21 @@ class EncryptedFileStorage implements JustSecureStorage {
   }
 
   // --------------------------------------------------------------------------
-  // JustStorage
+  // JustSecureStorage
   // --------------------------------------------------------------------------
 
   @override
   Future<String?> read(String key) async {
-    await _init();
+    _ensureInit();
     return _cache![key];
   }
 
   @override
   Future<void> write(String key, String value) async {
     try {
-      await _init();
+      _ensureInit();
       _cache![key] = value;
-      await _flush();
+      _flushEntry(key, value);
       _emit(key, value);
     } on StorageException {
       rethrow;
@@ -176,9 +153,9 @@ class EncryptedFileStorage implements JustSecureStorage {
   @override
   Future<void> delete(String key) async {
     try {
-      await _init();
+      _ensureInit();
       _cache!.remove(key);
-      await _flush();
+      web.window.localStorage.removeItem(_prefixed(key));
       _emit(key, null);
     } on StorageException {
       rethrow;
@@ -190,10 +167,18 @@ class EncryptedFileStorage implements JustSecureStorage {
   @override
   Future<void> clear() async {
     try {
-      await _init();
+      _ensureInit();
       final keys = List<String>.from(_cache!.keys);
       _cache!.clear();
-      await _flush();
+      final ls = web.window.localStorage;
+      final lsKeysToRemove = <String>[];
+      for (var i = 0; i < ls.length; i++) {
+        final k = ls.key(i);
+        if (k != null && k.startsWith(_dataPrefix)) lsKeysToRemove.add(k);
+      }
+      for (final k in lsKeysToRemove) {
+        ls.removeItem(k);
+      }
       for (final k in keys) {
         _emit(k, null);
       }
@@ -206,13 +191,13 @@ class EncryptedFileStorage implements JustSecureStorage {
 
   @override
   Future<bool> containsKey(String key) async {
-    await _init();
+    _ensureInit();
     return _cache!.containsKey(key);
   }
 
   @override
   Future<Map<String, String>> readAll() async {
-    await _init();
+    _ensureInit();
     return Map.unmodifiable(_cache!);
   }
 
@@ -222,7 +207,7 @@ class EncryptedFileStorage implements JustSecureStorage {
     T Function(Map<String, dynamic> json) fromJson,
   ) async {
     try {
-      await _init();
+      _ensureInit();
       final raw = _cache![key];
       if (raw == null) return null;
       final decoded = jsonDecode(raw);
@@ -263,9 +248,6 @@ class EncryptedFileStorage implements JustSecureStorage {
 
   @override
   Stream<String?> watch(String key) {
-    // Events that arrive while the snapshot is still being prepared are
-    // buffered and replayed immediately after the snapshot is emitted,
-    // preserving causal order.
     final buffered = <String?>[];
     bool snapshotEmitted = false;
 
@@ -274,7 +256,7 @@ class EncryptedFileStorage implements JustSecureStorage {
 
     sc = StreamController<String?>(
       sync: true,
-      onListen: () async {
+      onListen: () {
         innerSub = _controllerFor(key).stream.listen((value) {
           if (snapshotEmitted) {
             sc.add(value);
@@ -284,7 +266,7 @@ class EncryptedFileStorage implements JustSecureStorage {
         });
 
         try {
-          await _init();
+          _ensureInit();
           if (!sc.isClosed) {
             sc.add(_cache![key]);
             snapshotEmitted = true;
@@ -303,19 +285,13 @@ class EncryptedFileStorage implements JustSecureStorage {
     return sc.stream;
   }
 
-  /// Disposes all open stream controllers and releases the in-memory cache.
-  /// If [destroyKey] is `true`, also deletes the master key file — **all
-  /// encrypted data will become permanently unreadable.**  Only use this for
-  /// a full data-wipe.
-  Future<void> dispose({bool destroyKey = false}) async {
+  /// Disposes all open stream controllers.
+  void dispose() {
     for (final c in _controllers.values) {
       c.close();
     }
     _controllers.clear();
     _cache = null;
     _masterKey = null;
-    if (destroyKey) {
-      await _keyManager.destroy();
-    }
   }
 }

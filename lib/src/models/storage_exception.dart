@@ -4,6 +4,8 @@
 /// Wrap this in your own domain exceptions if you need to communicate storage
 /// failures further up the call stack.
 class StorageException implements Exception {
+  /// Creates a [StorageException] with a human-readable [message] and an
+  /// optional underlying [cause].
   const StorageException(this.message, {this.cause});
 
   /// Human-readable description of what went wrong.

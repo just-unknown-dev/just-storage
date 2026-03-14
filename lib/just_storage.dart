@@ -37,5 +37,7 @@ export 'src/just_secure_storage.dart';
 export 'src/models/storage_exception.dart';
 
 // Implementations (exposed for direct use in tests)
-export 'src/implementations/file_storage.dart';
-export 'src/implementations/encrypted_file_storage.dart';
+export 'src/implementations/file_storage.dart'
+    if (dart.library.js_interop) 'src/implementations/web_storage.dart';
+export 'src/implementations/encrypted_file_storage.dart'
+    if (dart.library.js_interop) 'src/implementations/web_secure_storage.dart';

@@ -1,3 +1,56 @@
+## [1.1.2] - 2026-03-14
+
+### Changed
+
+- **README** — added a *Comparison with similar packages* section with a feature matrix table contrasting `just_storage` against `shared_preferences`, `flutter_secure_storage`, and `hive`, plus guidance on when to choose each package.
+
+---
+
+## [1.1.1] - 2026-03-14
+
+### Fixed
+
+- **WASM compatibility** — replaced `dart:html` imports in `WebStorage` and `WebSecureStorage` with `package:web` (`web: ^1.0.0`); changed all conditional export guards from `dart.library.html` to `dart.library.js_interop`, which is available on both JS web and WASM targets.  The package is now compatible with `dart compile wasm` and Flutter WASM builds.
+
+- **Missing documentation warnings** — added doc comments to the previously undocumented constructors: `EncryptedFileStorage.new`, `FileStorage.new`, `JustSecureStorage.new`, `JustStandardStorage.new`, and `StorageException.new`.  Resolves the `missing_code_block_language_in_doc_comment` / pub.dev documentation score warnings.
+
+### Changed
+
+- **Example** (`example/example.dart`) — Example page added to demonstrate basic usage of `JustStorage` in a Flutter app, including reading/writing values, using the reactive `watch()` stream, and displaying the admin UI.
+
+---
+
+## [1.1.0] - 2026-03-14
+
+### Added
+
+- **Web platform support** — `JustStorage.standard()` and `JustStorage.encrypted()` now resolve to web-specific backends on Flutter Web via conditional imports; no API changes required in consuming code.
+
+- `WebStorage` — `JustStandardStorage` implementation for web, backed by `window.localStorage`.
+  - Values stored under keys prefixed with `just_storage:` to avoid collisions
+  - Full `read`, `write`, `delete`, `clear`, `containsKey`, `readAll`, `readJson`, `writeJson`, and `watch()` support
+  - `StreamController.broadcast(sync: true)` per key for zero-latency `watch()` delivery
+
+- `WebSecureStorage` — `JustSecureStorage` implementation for web, backed by `window.localStorage` with AES-256-GCM authenticated encryption.
+  - Master key generated on first use with `Random.secure()`, stored under a reserved `localStorage` key
+  - Per-value random 12-byte nonce (fresh on every `write`) — same nonce-reuse prevention as `EncryptedFileStorage`
+  - Data entries stored under keys prefixed with `just_secure:` in the format `{ "n": "<base64 nonce>", "ct": "<base64 ciphertext+GCMtag>" }`
+  - In-memory cache populated on first access; corrupt entries are silently skipped on load
+  - Full `read`, `write`, `delete`, `clear`, `containsKey`, `readAll`, `readJson`, `writeJson`, and `watch()` support
+
+- `JustStorageFactory` — conditional export (`just_storage_factory_native.dart` / `just_storage_factory_web.dart`) so the correct `JustStorage` implementation is selected at compile time with no runtime platform checks.
+
+- **Admin UI** (`package:just_storage/ui.dart`) — a complete Flutter admin screen for inspecting and editing storage at runtime.
+  - `JUStorageAdminScreen` — full-screen widget with three tabs:
+    - **Standard** — browse, search, add, edit, and delete plain key-value entries
+    - **Secure** — same operations for AES-256-GCM encrypted entries
+    - **Info** — entry counts, backend details, and danger-zone clear actions
+  - Accepts optional `standard` and `secure` constructor parameters to inject existing storage instances (useful when the app already wires up its own)
+  - Accepts an optional `theme` parameter to override the surrounding app theme
+  - `StorageProvider` (`ChangeNotifier`) — internal state manager; creates its own storage instances via `JustStorage` when none are supplied
+
+---
+
 ## [1.0.0] - 2026-02-23
 
 ### Added
