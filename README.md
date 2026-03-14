@@ -29,6 +29,41 @@ Built from scratch with no third-party storage wrappers (`shared_preferences`, `
 
 ---
 
+### When to choose just_storage
+
+- You want **both** standard and secure storage under a single, uniform API.
+- You need **WASM / Flutter Web** support for encrypted storage.
+- You want **authenticated encryption** (AES-256-GCM) that detects file tampering — not just confidentiality.
+- You want a **built-in admin UI** to inspect storage during development without extra tooling.
+- You prefer **zero code generation** — no adapters, no `build_runner`.
+- You want **reactive streams** on individual keys without pulling in a full reactive state library.
+
+### When to choose something else
+
+- You only need simple non-sensitive persistence and already use `shared_preferences` throughout your codebase — no reason to migrate.
+- You rely on **OS-level secure enclave / Keychain / Keystore** hardware backing — use `flutter_secure_storage`.
+- You store **large datasets** with complex queries — use a database (just_database, Isar, Drift, sqflite) rather than a key-value store.
+- You need **Hive's binary TypeAdapter** format for performance-critical large objects.
+
+## Comparison with similar packages
+
+| | **just_storage** | `shared_preferences` | `flutter_secure_storage` | `hive` |
+|---|---|---|---|---|
+| **Non-sensitive storage** | ✅ `JustStandardStorage` | ✅ | ❌ | ✅ |
+| **Encrypted storage** | ✅ `JustSecureStorage` | ❌ | ✅ | ✅ (encrypted box) |
+| **Encryption algorithm** | AES-256-GCM | — | OS keychain / keystore | AES-256-CBC |
+| **Authenticated encryption** (tamper detection) | ✅ GCM auth tag | — | Platform-dependent | ❌ |
+| **Web support** | ✅ WASM-compatible | ✅ | ⚠️ unofficial / limited | ✅ |
+| **Reactive `watch()` stream** | ✅ | ❌ | ❌ | ✅ (Box.watch) |
+| **Typed JSON helpers** | ✅ built-in | ❌ | ❌ | ✅ via TypeAdapters |
+| **Code generation required** | ❌ | ❌ | ❌ | ⚠️ for typed boxes |
+| **Atomic writes** | ✅ rename-swap | ✅ platform-native | ✅ platform-native | ✅ |
+| **Built-in admin UI** | ✅ `JUStorageAdminScreen` | ❌ | ❌ | ❌ |
+| **Third-party storage wrappers** | ❌ none | SQLite / NSUserDefaults / SharedPreferences | OS keychain / keystore | Custom binary format |
+| **Dependencies** | `path_provider`, `pointycastle`, `web` | `shared_preferences` platform plugins | `flutter_secure_storage` platform plugins | `hive`, `path_provider` |
+
+---
+
 ## Getting started
 
 Add the package to your app's `pubspec.yaml`:
