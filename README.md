@@ -70,7 +70,7 @@ Add the package to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  just_storage: ^1.1.0
+  just_storage: ^1.2.0
 ```
 
 Use [JustStorage] to obtain instances — no `path_provider` import required in your app:
@@ -85,14 +85,16 @@ final JustStandardStorage storage = await JustStorage.standard();
 final JustSecureStorage secure = await JustStorage.encrypted();
 ```
 
-Register both stores in your DI container (e.g. `get_it`):
+Register both stores in your DI container (e.g. `just_di`):
 
 ```dart
+import 'package:just_di/just_di.dart';
+
 final standard = await JustStorage.standard();
 final secure   = await JustStorage.encrypted();
 
-sl.registerLazySingleton<JustStandardStorage>(() => standard);
-sl.registerLazySingleton<JustSecureStorage>(() => secure);
+JustDi.registerLazySingleton<JustStandardStorage>(() => standard);
+JustDi.registerLazySingleton<JustSecureStorage>(() => secure);
 ```
 
 ---

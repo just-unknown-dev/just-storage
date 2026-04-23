@@ -31,6 +31,7 @@ class FileStorage implements JustStandardStorage {
 
   Map<String, String>? _cache;
   Future<void>? _initFuture;
+  Future<void> _flushChain = Future.value();
   final Map<String, StreamController<String?>> _controllers = {};
 
   // --------------------------------------------------------------------------
@@ -67,7 +68,12 @@ class FileStorage implements JustStandardStorage {
     }
   }
 
-  Future<void> _flush() async {
+  Future<void> _flush() {
+    _flushChain = _flushChain.catchError((_) {}).then((_) => _doFlush());
+    return _flushChain;
+  }
+
+  Future<void> _doFlush() async {
     await _directory.create(recursive: true);
     final tmp = _tmpFile;
     await tmp.writeAsString(jsonEncode(_cache), flush: true);
@@ -235,5 +241,7 @@ class FileStorage implements JustStandardStorage {
     }
     _controllers.clear();
     _cache = null;
+    _initFuture = null;
+    _flushChain = Future.value();
   }
 }

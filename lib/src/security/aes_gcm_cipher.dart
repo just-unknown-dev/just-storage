@@ -25,8 +25,16 @@ class AesGcmCipher {
   /// (see [randomNonce]). Separating nonce generation lets callers store the
   /// nonce alongside the ciphertext.
   Uint8List encrypt(Uint8List key, Uint8List nonce, Uint8List plaintext) {
-    assert(key.length == keyLength, 'Key must be $keyLength bytes.');
-    assert(nonce.length == nonceLength, 'Nonce must be $nonceLength bytes.');
+    if (key.length != keyLength) {
+      throw StorageException(
+        'AES-GCM key must be $keyLength bytes, got ${key.length}.',
+      );
+    }
+    if (nonce.length != nonceLength) {
+      throw StorageException(
+        'AES-GCM nonce must be $nonceLength bytes, got ${nonce.length}.',
+      );
+    }
 
     try {
       final cipher = GCMBlockCipher(AESEngine());
@@ -52,8 +60,16 @@ class AesGcmCipher {
   /// the ciphertext, the nonce, or the key has been tampered with.
   Uint8List decrypt(
       Uint8List key, Uint8List nonce, Uint8List ciphertextWithTag) {
-    assert(key.length == keyLength, 'Key must be $keyLength bytes.');
-    assert(nonce.length == nonceLength, 'Nonce must be $nonceLength bytes.');
+    if (key.length != keyLength) {
+      throw StorageException(
+        'AES-GCM key must be $keyLength bytes, got ${key.length}.',
+      );
+    }
+    if (nonce.length != nonceLength) {
+      throw StorageException(
+        'AES-GCM nonce must be $nonceLength bytes, got ${nonce.length}.',
+      );
+    }
 
     try {
       final cipher = GCMBlockCipher(AESEngine());

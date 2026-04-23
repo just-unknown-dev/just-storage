@@ -55,6 +55,7 @@ class EncryptedFileStorage implements JustSecureStorage {
   Map<String, String>? _cache;
   Uint8List? _masterKey;
   Future<void>? _initFuture;
+  Future<void> _flushChain = Future.value();
   final Map<String, StreamController<String?>> _controllers = {};
 
   // --------------------------------------------------------------------------
@@ -94,14 +95,29 @@ class EncryptedFileStorage implements JustSecureStorage {
         final v = entry.value;
         if (v is! Map) continue;
 
-        final nonce = base64.decode(v['n'] as String);
-        final ct = base64.decode(v['ct'] as String);
-        final plainBytes = _cipher.decrypt(
-          _masterKey!,
-          Uint8List.fromList(nonce),
-          Uint8List.fromList(ct),
-        );
-        result[k] = utf8.decode(plainBytes);
+        final rawN = v['n'];
+        final rawCt = v['ct'];
+        if (rawN is! String || rawCt is! String) {
+          throw StorageException(
+            'Encrypted storage file is corrupt: entry "$k" has missing or '
+            'malformed fields.',
+          );
+        }
+
+        try {
+          final nonce = base64.decode(rawN);
+          final ct = base64.decode(rawCt);
+          final plainBytes = _cipher.decrypt(
+            _masterKey!,
+            Uint8List.fromList(nonce),
+            Uint8List.fromList(ct),
+          );
+          result[k] = utf8.decode(plainBytes);
+        } on StorageException {
+          rethrow; // Auth failures must propagate — tampered data.
+        } catch (_) {
+          // Skip entries with malformed base64 or other format errors.
+        }
       }
       _cache = result;
     } catch (e) {
@@ -113,7 +129,12 @@ class EncryptedFileStorage implements JustSecureStorage {
     }
   }
 
-  Future<void> _flush() async {
+  Future<void> _flush() {
+    _flushChain = _flushChain.catchError((_) {}).then((_) => _doFlush());
+    return _flushChain;
+  }
+
+  Future<void> _doFlush() async {
     await _directory.create(recursive: true);
     _masterKey ??= await _keyManager.loadOrCreate();
 
@@ -314,6 +335,8 @@ class EncryptedFileStorage implements JustSecureStorage {
     _controllers.clear();
     _cache = null;
     _masterKey = null;
+    _initFuture = null;
+    _flushChain = Future.value();
     if (destroyKey) {
       await _keyManager.destroy();
     }

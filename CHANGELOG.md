@@ -1,3 +1,24 @@
+## [1.2.0] - 2026-04-23
+
+### Added
+
+- `WebAesGcmCipher` — new web/WASM AES-256-GCM backend powered by the browser's native Web Crypto API (`window.crypto.subtle`) with typed import/encrypt/decrypt helpers and secure key/nonce generation via `getRandomValues`.
+
+### Changed
+
+- `WebSecureStorage` now uses `WebAesGcmCipher` instead of the pure-Dart cipher on web, with async one-time initialization (`_initFuture`) and imported `CryptoKey` usage for encrypt/decrypt operations.
+- **README** — updated the package version snippet to `^1.2.0` and switched the dependency-injection setup example to `just_di` (`JustDi.registerLazySingleton`) instead of a `get_it`-style registration snippet.
+- `pubspec.yaml` constraints were raised to `sdk: >=3.3.0 <4.0.0` and `flutter: >=3.19.0` for this release.
+
+### Fixed
+
+- **Write ordering / race safety** — `FileStorage` and `EncryptedFileStorage` now serialize flush operations through a chained future to prevent overlapping writes.
+- **Reinitialization after dispose** — both native storage implementations now reset initialization/flush state in `dispose()` so instances can be safely re-used.
+- **Encrypted cache loading robustness** — malformed encrypted entry fields are validated explicitly; malformed-format entries are skipped while AES-GCM authentication failures still propagate as `StorageException`.
+- **AES-GCM input validation** — `AesGcmCipher` now throws `StorageException` for invalid key/nonce lengths (instead of assert-only checks).
+
+---
+
 ## [1.1.2] - 2026-03-14
 
 ### Changed
