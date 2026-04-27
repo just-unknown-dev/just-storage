@@ -75,7 +75,8 @@ class FileStorage implements JustStandardStorage {
 
   Future<void> _doFlush() async {
     await _directory.create(recursive: true);
-    final tmp = _tmpFile;
+    final uniqueSuffix = DateTime.now().microsecondsSinceEpoch;
+    final tmp = File('${_tmpFile.path}.$uniqueSuffix');
     await tmp.writeAsString(jsonEncode(_cache), flush: true);
     await tmp.rename(_dataFile.path);
   }
