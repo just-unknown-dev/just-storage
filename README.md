@@ -70,7 +70,7 @@ Add the package to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  just_storage: ^1.2.0
+  just_storage: ^1.2.1
 ```
 
 Use [JustStorage] to obtain instances — no `path_provider` import required in your app:

@@ -1,3 +1,11 @@
+## [1.2.1] - 2026-04-27
+
+### Fixed
+
+- **Temporary file collision** — `FileStorage._doFlush` now appends a microsecond-precision suffix to the `.tmp` filename (`<name>.<microseconds>`) so that concurrent flush operations can never overwrite each other's in-flight temporary file before the atomic rename completes.
+
+---
+
 ## [1.2.0] - 2026-04-23
 
 ### Added
