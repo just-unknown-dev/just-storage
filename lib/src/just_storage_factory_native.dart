@@ -14,37 +14,64 @@ import 'just_standard_storage.dart';
 /// final JustSecureStorage   secure  = await JustStorage.encrypted();
 /// ```
 ///
-/// Register in a DI container (e.g. `get_it`):
+/// Each call with the same directory returns the **same** instance. An
+/// instance keeps the whole store in memory and rewrites its file on every
+/// write, so two instances over one directory would silently overwrite each
+/// other's keys. Sharing one instance per directory keeps every caller's
+/// writes. Because the instance is shared, calling `dispose()` on it affects
+/// every holder.
+///
+/// Register in a DI container (e.g. `just_di`):
 /// ```dart
-/// sl.registerLazySingleton<JustStandardStorage>(() => await JustStorage.standard());
-/// sl.registerLazySingleton<JustSecureStorage>(()   => await JustStorage.encrypted());
+/// final secure = await JustStorage.encrypted();
+/// JustDi.registerLazySingleton<JustSecureStorage>(() => secure);
 /// ```
 abstract final class JustStorage {
   JustStorage._();
 
-  /// Returns a [FileStorage] instance backed by the platform's application
-  /// support directory.  Values are stored as plain JSON.
+  static final Map<String, FileStorage> _standardInstances = {};
+  static final Map<String, EncryptedFileStorage> _encryptedInstances = {};
+
+  /// Returns the [FileStorage] backed by the platform's application support
+  /// directory.  Values are stored as plain JSON.
   ///
   /// Pass [directory] to override the resolved path — useful in unit tests:
   /// ```dart
   /// final dir = Directory.systemTemp.createTempSync('test_');
   /// final storage = await JustStorage.standard(dir);
   /// ```
+  ///
+  /// Repeated calls for the same directory return the same instance.
   static Future<JustStandardStorage> standard([Directory? directory]) async {
     final dir = directory ?? await getApplicationSupportDirectory();
-    return FileStorage(dir);
+    return _standardInstances.putIfAbsent(
+      _instanceKey(dir),
+      () => FileStorage(dir),
+    );
   }
 
-  /// Returns an [EncryptedFileStorage] instance backed by the platform's
-  /// application support directory.  Values are encrypted with AES-256-GCM.
+  /// Returns the [EncryptedFileStorage] backed by the platform's application
+  /// support directory.  Values are encrypted with AES-256-GCM.
   ///
   /// Pass [directory] to override the resolved path — useful in unit tests:
   /// ```dart
   /// final dir = Directory.systemTemp.createTempSync('test_');
   /// final secure = await JustStorage.encrypted(dir);
   /// ```
+  ///
+  /// Repeated calls for the same directory return the same instance.
   static Future<JustSecureStorage> encrypted([Directory? directory]) async {
     final dir = directory ?? await getApplicationSupportDirectory();
-    return EncryptedFileStorage(dir);
+    return _encryptedInstances.putIfAbsent(
+      _instanceKey(dir),
+      () => EncryptedFileStorage(dir),
+    );
+  }
+
+  /// Normalises [dir] so that different spellings of one directory
+  /// (relative, `..` segments, letter case on Windows) share an instance.
+  static String _instanceKey(Directory dir) {
+    final path = dir.absolute.uri.normalizePath().toFilePath();
+    return Platform.isWindows ? path.toLowerCase() : path;
   }
 }

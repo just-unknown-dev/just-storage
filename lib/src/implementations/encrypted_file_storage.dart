@@ -152,7 +152,8 @@ class EncryptedFileStorage implements JustSecureStorage {
       };
     }
 
-    final tmp = _tmpFile;
+    final uniqueSuffix = DateTime.now().microsecondsSinceEpoch;
+    final tmp = File('${_tmpFile.path}.$uniqueSuffix');
     await tmp.writeAsString(jsonEncode(outer), flush: true);
     await tmp.rename(_dataFile.path);
   }

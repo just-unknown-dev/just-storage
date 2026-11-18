@@ -334,4 +334,86 @@ void main() {
       expect(emissions, ['secret', null]);
     });
   });
+
+  // ------------------------------------------------------------------
+  // JustStorage factory
+  // ------------------------------------------------------------------
+  group('JustStorage factory', () {
+    Future<Directory> tempDir(String prefix) async {
+      final dir = await Directory.systemTemp.createTemp(prefix);
+      _tempDirs.add(dir);
+      return dir;
+    }
+
+    test('two encrypted() handles keep each other\'s keys', () async {
+      final dir = await tempDir('factory_enc_');
+      final handles = await Future.wait([
+        JustStorage.encrypted(dir),
+        JustStorage.encrypted(dir),
+      ]);
+      final a = handles[0];
+      final b = handles[1];
+
+      // Load both caches before either writes: separate instances would now
+      // each rewrite the file from their own stale cache.
+      expect(await a.read('user'), isNull);
+      expect(await b.read('company'), isNull);
+      await a.write('user', 'alice');
+      await b.write('company', 'acme');
+
+      expect(await a.readAll(), {'user': 'alice', 'company': 'acme'});
+      final reopened = EncryptedFileStorage(dir);
+      expect(await reopened.read('user'), 'alice');
+      expect(await reopened.read('company'), 'acme');
+    });
+
+    test('two standard() handles keep each other\'s keys', () async {
+      final dir = await tempDir('factory_std_');
+      final a = await JustStorage.standard(dir);
+      final b = await JustStorage.standard(dir);
+
+      expect(await a.read('theme'), isNull);
+      expect(await b.read('locale'), isNull);
+      await a.write('theme', 'dark');
+      await b.write('locale', 'en');
+
+      final reopened = FileStorage(dir);
+      expect(await reopened.readAll(), {'theme': 'dark', 'locale': 'en'});
+    });
+
+    test('one instance per directory, however it is spelled', () async {
+      final dir = await tempDir('factory_same_');
+      final viaParent = Directory(
+        '${dir.path}${Platform.pathSeparator}sub'
+        '${Platform.pathSeparator}..',
+      );
+
+      expect(
+        identical(
+          await JustStorage.encrypted(dir),
+          await JustStorage.encrypted(viaParent),
+        ),
+        isTrue,
+      );
+      expect(
+        identical(
+          await JustStorage.standard(dir),
+          await JustStorage.standard(viaParent),
+        ),
+        isTrue,
+      );
+    });
+
+    test('different directories get different instances', () async {
+      final first = await tempDir('factory_a_');
+      final second = await tempDir('factory_b_');
+
+      final a = await JustStorage.encrypted(first);
+      final b = await JustStorage.encrypted(second);
+      expect(identical(a, b), isFalse);
+
+      await a.write('k', 'first');
+      expect(await b.read('k'), isNull);
+    });
+  });
 }

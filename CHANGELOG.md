@@ -1,3 +1,13 @@
+## [1.2.2] - Unreleased
+
+### Fixed
+
+- **Lost keys with several handles** — `JustStorage.standard()` and `JustStorage.encrypted()` now return one shared instance per resolved directory instead of a new `FileStorage` / `EncryptedFileStorage` on every call. Each instance caches the whole store and rewrites the file on every write, so two handles over the same directory silently dropped each other's keys. Different spellings of one directory (relative paths, `..` segments, letter case on Windows) map to the same instance. Because the instance is shared, `dispose()` now affects every holder.
+- **Web factory** — `JustStorage.standard()` and `JustStorage.encrypted()` on web also return a single shared instance, so a second `WebSecureStorage` no longer serves stale cached values and `watch` streams see writes made through any handle.
+- **Encrypted temporary file collision** — `EncryptedFileStorage` now gives its `.tmp` file the same microsecond suffix that `FileStorage` received in 1.2.1.
+
+---
+
 ## [1.2.1] - 2026-04-27
 
 ### Fixed

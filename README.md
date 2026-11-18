@@ -85,6 +85,12 @@ final JustStandardStorage storage = await JustStorage.standard();
 final JustSecureStorage secure = await JustStorage.encrypted();
 ```
 
+Each factory returns **one shared instance per directory** (one per origin on
+web): calling `JustStorage.encrypted()` from several places hands every caller
+the same object, so their writes never overwrite each other. Constructing
+`FileStorage` / `EncryptedFileStorage` directly bypasses this. Do it only when
+nothing else opens the same directory.
+
 Register both stores in your DI container (e.g. `just_di`):
 
 ```dart
