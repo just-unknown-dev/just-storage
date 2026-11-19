@@ -82,15 +82,31 @@ may ask for changes or clarification.
 
 ## Development setup
 
-**Prerequisites**: [Dart SDK](https://dart.dev/get-dart) ≥ 3.0 or
-[Flutter SDK](https://flutter.dev/docs/get-started/install) ≥ 3.10.
+**Prerequisites**: [Flutter SDK](https://flutter.dev/docs/get-started/install)
+≥ 3.47.1 (Dart ≥ 3.11). It is a Flutter package: use `flutter`, not `dart`,
+for `pub get` and `test`.
 
 ```bash
 # From the package root
-dart pub get
+flutter pub get
 ```
 
 The package has no generated code, so no additional build steps are required.
+
+### Layout
+
+`lib/src/` is cut by feature, in layers; `test/library_layout_test.dart`
+checks it:
+
+| Folder | What | May import |
+|---|---|---|
+| `core/` | The storage types, the exceptions, what every platform shares | Dart, `flutter/foundation.dart` |
+| `file/` | Native platforms: files, pointycastle | `core/`, `dart:io` |
+| `web/` | The web: `localStorage`, Web Crypto, IndexedDB | `core/`, `package:web` |
+| `ui/` | The admin screen | `core/`, `file/` or `web/`, Flutter |
+
+Each folder has a barrel named after it; a file the public libraries don't
+export marks its declarations `@internal`.
 
 ---
 
@@ -100,7 +116,9 @@ The package has no generated code, so no additional build steps are required.
 - Format code with `dart format .` before committing.
 - All public symbols must have doc comments (`///`).
 - Avoid adding new dependencies without prior discussion — the package is
-  deliberately minimal (`dart:io`, `path_provider`, `pointycastle` only).
+  deliberately minimal (`path_provider`, `pointycastle` and `web` only).
+- Never let a storage overwrite data it couldn't read: throw a
+  `StorageCorruptException` and leave it for `clear()`.
 - Prefer immutability and pure functions where practical.
 - All `StorageException` messages should be human-readable and include the
   offending key where applicable.
@@ -135,38 +153,40 @@ docs(readme): add DI registration example for Riverpod
 
 ---
 
-## Development Setup
-
-| Tool | Minimum version | Recommended version |
-|------|-----------------| --------------------|
-| Flutter | 1.17.0 | 3.41.1 |
-| Dart SDK | 3.11.0 | 3.11.0 |
-
-The repository is a **Flutter package**. You can develop and test it using the companion admin app located at the workspace root.
-
 ## Running tests
 
 ```bash
 # From the package root
-dart test
+flutter test
 ```
 
 To run a single test file:
 ```bash
-dart test test/just_storage_test.dart
+flutter test test/file/file_storage_test.dart
 ```
 
-The test suite uses real temporary directories (`Directory.systemTemp`) — no
-mocking of `dart:io` is required. Tests clean up after themselves via
-`tearDown`.
+The native tests use real temporary directories (`Directory.systemTemp`) — no
+mocking of `dart:io` is required — and clean up after themselves. The tests
+under `test/web/` run in a browser:
+
+```bash
+flutter test --platform chrome test/web
+```
+
+`example/example.dart` is a small app that writes some values and opens the
+admin screen.
 
 ### Writing tests
 
-- Place new tests in `test/just_storage_test.dart` under the appropriate
-  `group`.
-- Cover both the happy path and relevant error cases (`StorageException`).
-- For `EncryptedFileStorage` tests, verify tamper detection (GCM tag
-  mismatch) where applicable.
+- Tests mirror `lib/src/`: `test/core/`, `test/file/`, `test/web/`,
+  `test/ui/`.
+- Behaviour every storage shares goes in `test/support/storage_contract.dart`,
+  which each implementation's test runs.
+- Cover both the happy path and the error cases (`StorageException`,
+  `StorageCorruptException`), and check that a storage leaves data it can't
+  read untouched.
+- For the secure storages, check tamper detection (a changed value, a value
+  moved to another key) where it applies.
 
 ---
 

@@ -1,24 +1,29 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show internal;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../storage_provider.dart';
+import '../../core/core.dart';
+import '../storage_admin_controller.dart';
 
-/// Displays all key-value entries for either the standard or secure store,
-/// with search-filtering, inline type badges, and full CRUD operations.
+/// The entries of one storage — the secure one when [secure] — with a
+/// search field, a type badge on each value, and adding, editing, copying
+/// and deleting.
+///
+/// Secure values are hidden until shown, and only their keys are searched
+/// while they are.
+@internal
 class EntriesTab extends StatefulWidget {
-  final StorageProvider provider;
+  /// The tab over [controller]'s secure storage when [secure], else its
+  /// standard one.
+  const EntriesTab({super.key, required this.controller, required this.secure});
 
-  /// When `true`, shows and manages [StorageProvider.secureEntries].
-  /// When `false`, shows and manages [StorageProvider.standardEntries].
-  final bool isSecure;
+  /// What the tab shows.
+  final StorageAdminController controller;
 
-  const EntriesTab({
-    super.key,
-    required this.provider,
-    required this.isSecure,
-  });
+  /// Whether it shows the secure storage.
+  final bool secure;
 
   @override
   State<EntriesTab> createState() => _EntriesTabState();
@@ -27,41 +32,42 @@ class EntriesTab extends StatefulWidget {
 class _EntriesTabState extends State<EntriesTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  late bool _showValues = !widget.secure;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
-    widget.provider.addListener(_onProviderChanged);
+    widget.controller.addListener(_onControllerChanged);
   }
 
   @override
   void didUpdateWidget(EntriesTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.provider != widget.provider) {
-      oldWidget.provider.removeListener(_onProviderChanged);
-      widget.provider.addListener(_onProviderChanged);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
     }
   }
 
   @override
   void dispose() {
-    _searchController.removeListener(_onSearchChanged);
-    _searchController.dispose();
-    widget.provider.removeListener(_onProviderChanged);
+    _searchController
+      ..removeListener(_onSearchChanged)
+      ..dispose();
+    widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
 
   void _onSearchChanged() =>
       setState(() => _searchQuery = _searchController.text.toLowerCase());
 
-  void _onProviderChanged() {
+  void _onControllerChanged() {
     if (mounted) setState(() {});
   }
 
-  Map<String, String> get _allEntries => widget.isSecure
-      ? widget.provider.secureEntries
-      : widget.provider.standardEntries;
+  Map<String, String> get _allEntries =>
+      widget.controller.entries(secure: widget.secure);
 
   List<MapEntry<String, String>> get _filteredEntries {
     final entries = _allEntries.entries.toList()
@@ -71,37 +77,41 @@ class _EntriesTabState extends State<EntriesTab> {
         .where(
           (e) =>
               e.key.toLowerCase().contains(_searchQuery) ||
-              e.value.toLowerCase().contains(_searchQuery),
+              (_showValues && e.value.toLowerCase().contains(_searchQuery)),
         )
         .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.provider.initialized) {
+    final controller = widget.controller;
+    if (!controller.loaded) {
       return const Center(child: CircularProgressIndicator());
     }
 
     final entries = _filteredEntries;
+    final error = controller.error(secure: widget.secure);
+    final unreadable = error is StorageCorruptException;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: Column(
         children: [
-          // Error banner
-          if (widget.provider.error != null)
-            _ErrorBanner(message: widget.provider.error!),
+          if (error != null) _ErrorBanner(error: error),
 
-          // Search bar
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search keys or values…',
+                hintText: _showValues
+                    ? 'Search keys or values…'
+                    : 'Search keys…',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.close, size: 18),
+                        tooltip: 'Clear search',
                         onPressed: _searchController.clear,
                       )
                     : null,
@@ -115,7 +125,6 @@ class _EntriesTabState extends State<EntriesTab> {
             ),
           ),
 
-          // Count + clear-all row
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             child: Row(
@@ -125,14 +134,26 @@ class _EntriesTabState extends State<EntriesTab> {
                   '${_searchQuery.isNotEmpty ? ' matching' : ''} '
                   'entr${entries.length == 1 ? 'y' : 'ies'}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const Spacer(),
-                if (_allEntries.isNotEmpty)
+                if (widget.secure)
+                  IconButton(
+                    icon: Icon(
+                      _showValues
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 18,
+                    ),
+                    tooltip: _showValues ? 'Hide values' : 'Show values',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => setState(() => _showValues = !_showValues),
+                  ),
+                if (_allEntries.isNotEmpty || unreadable)
                   TextButton.icon(
                     style: TextButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.error,
+                      foregroundColor: colorScheme.error,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
@@ -144,20 +165,20 @@ class _EntriesTabState extends State<EntriesTab> {
             ),
           ),
 
-          // List or empty state
           Expanded(
             child: entries.isEmpty
                 ? _EmptyState(
                     isFiltered: _searchQuery.isNotEmpty,
-                    isSecure: widget.isSecure,
-                    onAdd: () => _showEntryDialog(context),
+                    secure: widget.secure,
+                    onAdd: unreadable ? null : () => _showEntryDialog(context),
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(8, 4, 8, 88),
                     itemCount: entries.length,
                     itemBuilder: (_, i) => _EntryCard(
                       entry: entries[i],
-                      isSecure: widget.isSecure,
+                      secure: widget.secure,
+                      showValue: _showValues,
                       onEdit: () =>
                           _showEntryDialog(context, existing: entries[i]),
                       onDelete: () => _confirmDelete(context, entries[i].key),
@@ -167,11 +188,13 @@ class _EntriesTabState extends State<EntriesTab> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showEntryDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add entry'),
-      ),
+      floatingActionButton: unreadable
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _showEntryDialog(context),
+              icon: const Icon(Icons.add),
+              label: const Text('Add entry'),
+            ),
     );
   }
 
@@ -188,19 +211,18 @@ class _EntriesTabState extends State<EntriesTab> {
       builder: (_) => _EntryDialog(
         existingKey: existing?.key,
         existingValue: existing?.value,
-        isSecure: widget.isSecure,
+        secure: widget.secure,
       ),
     );
     if (result == null || !context.mounted) return;
     try {
-      await widget.provider.writeEntry(
+      await widget.controller.writeEntry(
         result.key,
         result.value,
-        isSecure: widget.isSecure,
+        secure: widget.secure,
       );
     } catch (e) {
-      if (!context.mounted) return;
-      _showError(context, 'Failed to save: $e');
+      if (context.mounted) _showError(context, 'Could not save: $e');
     }
   }
 
@@ -209,9 +231,8 @@ class _EntriesTabState extends State<EntriesTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete entry'),
-        content: RichText(
-          text: TextSpan(
-            style: Theme.of(context).textTheme.bodyMedium,
+        content: Text.rich(
+          TextSpan(
             children: [
               const TextSpan(text: 'Delete '),
               TextSpan(
@@ -229,7 +250,8 @@ class _EntriesTabState extends State<EntriesTab> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
@@ -239,41 +261,27 @@ class _EntriesTabState extends State<EntriesTab> {
     );
     if (confirmed != true || !context.mounted) return;
     try {
-      await widget.provider.deleteEntry(key, isSecure: widget.isSecure);
+      await widget.controller.deleteEntry(key, secure: widget.secure);
     } catch (e) {
-      if (!context.mounted) return;
-      _showError(context, 'Failed to delete: $e');
+      if (context.mounted) _showError(context, 'Could not delete: $e');
     }
   }
 
   Future<void> _confirmClearAll(BuildContext context) async {
-    final count = _allEntries.length;
-    final label = widget.isSecure ? 'secure' : 'standard';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear all entries'),
-        content: Text(
-          'This will permanently remove all $count '
-          'entr${count == 1 ? 'y' : 'ies'} from $label storage.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Clear all'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmClear(
+      context,
+      count: _allEntries.length,
+      secure: widget.secure,
+      unreadable:
+          widget.controller.error(secure: widget.secure)
+              is StorageCorruptException,
     );
-    if (confirmed != true || !context.mounted) return;
-    await widget.provider.clearAll(isSecure: widget.isSecure);
+    if (!confirmed || !context.mounted) return;
+    try {
+      await widget.controller.clearAll(secure: widget.secure);
+    } catch (e) {
+      if (context.mounted) _showError(context, 'Could not clear: $e');
+    }
   }
 
   void _copyToClipboard(BuildContext context, String value) {
@@ -287,13 +295,55 @@ class _EntriesTabState extends State<EntriesTab> {
   }
 
   void _showError(BuildContext context, String message) {
+    final colorScheme = Theme.of(context).colorScheme;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
+        content: Text(message, style: TextStyle(color: colorScheme.onError)),
+        backgroundColor: colorScheme.error,
       ),
     );
   }
+}
+
+/// Asks whether to remove every entry of a storage — the secure one when
+/// [secure] — holding [count] entries, or [unreadable]. True when the user
+/// agrees.
+@internal
+Future<bool> confirmClear(
+  BuildContext context, {
+  required int count,
+  required bool secure,
+  required bool unreadable,
+}) async {
+  final label = secure ? 'secure' : 'standard';
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('Clear ${secure ? 'secure' : 'standard'} storage'),
+      content: Text(
+        unreadable
+            ? 'The $label storage can\'t be read. Clearing it removes what is '
+                  'there for good and starts over with an empty one.'
+            : 'This permanently removes all $count '
+                  'entr${count == 1 ? 'y' : 'ies'} from $label storage.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(ctx).colorScheme.error,
+            foregroundColor: Theme.of(ctx).colorScheme.onError,
+          ),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Clear all'),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
 }
 
 // =============================================================================
@@ -301,25 +351,29 @@ class _EntriesTabState extends State<EntriesTab> {
 // =============================================================================
 
 class _EntryCard extends StatelessWidget {
-  final MapEntry<String, String> entry;
-  final bool isSecure;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  final VoidCallback onCopy;
-
   const _EntryCard({
     required this.entry,
-    required this.isSecure,
+    required this.secure,
+    required this.showValue,
     required this.onEdit,
     required this.onDelete,
     required this.onCopy,
   });
 
+  final MapEntry<String, String> entry;
+  final bool secure;
+  final bool showValue;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onCopy;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final type = _detectValueType(entry.value);
-    final preview = entry.value.length > 120
+    final type = showValue ? _detectValueType(entry.value) : null;
+    final preview = !showValue
+        ? '••••••••'
+        : entry.value.length > 120
         ? '${entry.value.substring(0, 120)}…'
         : entry.value;
 
@@ -329,13 +383,13 @@ class _EntryCard extends StatelessWidget {
         contentPadding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
         leading: CircleAvatar(
           radius: 18,
-          backgroundColor: isSecure
+          backgroundColor: secure
               ? colorScheme.tertiaryContainer
               : colorScheme.secondaryContainer,
           child: Icon(
-            _typeIcon(type),
+            type == null ? Icons.lock_outline : _typeIcon(type),
             size: 17,
-            color: isSecure
+            color: secure
                 ? colorScheme.onTertiaryContainer
                 : colorScheme.onSecondaryContainer,
           ),
@@ -353,18 +407,17 @@ class _EntryCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 6),
-            _TypeBadge(type: type),
+            if (type != null) ...[
+              const SizedBox(width: 6),
+              _TypeBadge(type: type),
+            ],
           ],
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 2),
           child: Text(
             preview,
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -405,35 +458,38 @@ class _EntryCard extends StatelessWidget {
 // Value type detection & badges
 // =============================================================================
 
-enum _ValueType { json, number, bool_, string }
+enum _ValueType { json, number, boolean, string }
 
 _ValueType _detectValueType(String value) {
-  if (value == 'true' || value == 'false') return _ValueType.bool_;
+  if (value == 'true' || value == 'false') return _ValueType.boolean;
   if (double.tryParse(value) != null) return _ValueType.number;
   try {
     final decoded = jsonDecode(value);
     if (decoded is Map || decoded is List) return _ValueType.json;
-  } catch (_) {}
+  } on FormatException {
+    // Not JSON: a plain string.
+  }
   return _ValueType.string;
 }
 
 IconData _typeIcon(_ValueType type) => switch (type) {
-      _ValueType.json => Icons.data_object,
-      _ValueType.number => Icons.tag,
-      _ValueType.bool_ => Icons.toggle_on_outlined,
-      _ValueType.string => Icons.text_fields,
-    };
+  _ValueType.json => Icons.data_object,
+  _ValueType.number => Icons.tag,
+  _ValueType.boolean => Icons.toggle_on_outlined,
+  _ValueType.string => Icons.text_fields,
+};
 
 class _TypeBadge extends StatelessWidget {
-  final _ValueType type;
   const _TypeBadge({required this.type});
+
+  final _ValueType type;
 
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (type) {
       _ValueType.json => ('JSON', const Color(0xFF00897B)),
       _ValueType.number => ('NUM', const Color(0xFF1E88E5)),
-      _ValueType.bool_ => ('BOOL', const Color(0xFF8E24AA)),
+      _ValueType.boolean => ('BOOL', const Color(0xFF8E24AA)),
       _ValueType.string => ('STR', const Color(0xFF757575)),
     };
     return Container(
@@ -461,33 +517,30 @@ class _TypeBadge extends StatelessWidget {
 // =============================================================================
 
 class _EntryDialog extends StatefulWidget {
-  final String? existingKey;
-  final String? existingValue;
-  final bool isSecure;
-
   const _EntryDialog({
     this.existingKey,
     this.existingValue,
-    required this.isSecure,
+    required this.secure,
   });
+
+  final String? existingKey;
+  final String? existingValue;
+  final bool secure;
 
   @override
   State<_EntryDialog> createState() => _EntryDialogState();
 }
 
 class _EntryDialogState extends State<_EntryDialog> {
-  late final TextEditingController _keyCtrl;
-  late final TextEditingController _valueCtrl;
+  late final TextEditingController _keyCtrl = TextEditingController(
+    text: widget.existingKey ?? '',
+  );
+  late final TextEditingController _valueCtrl = TextEditingController(
+    text: widget.existingValue ?? '',
+  );
   final _formKey = GlobalKey<FormState>();
 
   bool get _isEditing => widget.existingKey != null;
-
-  @override
-  void initState() {
-    super.initState();
-    _keyCtrl = TextEditingController(text: widget.existingKey ?? '');
-    _valueCtrl = TextEditingController(text: widget.existingValue ?? '');
-  }
 
   @override
   void dispose() {
@@ -498,11 +551,11 @@ class _EntryDialogState extends State<_EntryDialog> {
 
   void _formatJson() {
     try {
-      final pretty = const JsonEncoder.withIndent('  ')
-          .convert(jsonDecode(_valueCtrl.text));
-      _valueCtrl.text = pretty;
-    } catch (_) {
-      // Not valid JSON — leave as-is
+      _valueCtrl.text = const JsonEncoder.withIndent(
+        '  ',
+      ).convert(jsonDecode(_valueCtrl.text));
+    } on FormatException {
+      // Not JSON: leave it as it is.
     }
   }
 
@@ -519,7 +572,6 @@ class _EntryDialogState extends State<_EntryDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Key field
               TextFormField(
                 controller: _keyCtrl,
                 readOnly: _isEditing,
@@ -529,15 +581,15 @@ class _EntryDialogState extends State<_EntryDialog> {
                   labelText: 'Key',
                   border: const OutlineInputBorder(),
                   filled: _isEditing,
-                  fillColor:
-                      _isEditing ? colorScheme.surfaceContainerHighest : null,
+                  fillColor: _isEditing
+                      ? colorScheme.surfaceContainerHighest
+                      : null,
                 ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Key is required' : null,
               ),
               const SizedBox(height: 12),
-
-              // Value field
+              // An empty value is a value: the storage keeps it.
               TextFormField(
                 controller: _valueCtrl,
                 autofocus: _isEditing,
@@ -559,12 +611,8 @@ class _EntryDialogState extends State<_EntryDialog> {
                     ),
                   ),
                 ),
-                validator: (v) =>
-                    (v == null || v.isEmpty) ? 'Value is required' : null,
               ),
-
-              // Secure-mode note
-              if (widget.isSecure) ...[
+              if (widget.secure) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -573,8 +621,8 @@ class _EntryDialogState extends State<_EntryDialog> {
                     Text(
                       'Will be encrypted with AES-256-GCM',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.tertiary,
-                          ),
+                        color: colorScheme.tertiary,
+                      ),
                     ),
                   ],
                 ),
@@ -609,18 +657,19 @@ class _EntryDialogState extends State<_EntryDialog> {
 // =============================================================================
 
 class _EmptyState extends StatelessWidget {
-  final bool isFiltered;
-  final bool isSecure;
-  final VoidCallback onAdd;
-
   const _EmptyState({
     required this.isFiltered,
-    required this.isSecure,
+    required this.secure,
     required this.onAdd,
   });
 
+  final bool isFiltered;
+  final bool secure;
+  final VoidCallback? onAdd;
+
   @override
   Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -628,28 +677,25 @@ class _EmptyState extends StatelessWidget {
           Icon(
             isFiltered
                 ? Icons.search_off
-                : isSecure
-                    ? Icons.lock_outline
-                    : Icons.storage_outlined,
+                : secure
+                ? Icons.lock_outline
+                : Icons.storage_outlined,
             size: 56,
-            color: Colors.grey,
+            color: muted,
           ),
           const SizedBox(height: 12),
           Text(
             isFiltered ? 'No matching entries' : 'No entries yet',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           Text(
             isFiltered
                 ? 'Try a different search term.'
-                : 'Write your first ${isSecure ? 'secure ' : ''}key-value pair.',
-            style: const TextStyle(color: Colors.grey),
+                : 'Write your first ${secure ? 'secure ' : ''}key-value pair.',
+            style: TextStyle(color: muted),
           ),
-          if (!isFiltered) ...[
+          if (!isFiltered && onAdd != null) ...[
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: onAdd,
@@ -668,12 +714,17 @@ class _EmptyState extends StatelessWidget {
 // =============================================================================
 
 class _ErrorBanner extends StatelessWidget {
-  final String message;
-  const _ErrorBanner({required this.message});
+  const _ErrorBanner({required this.error});
+
+  final Object error;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final message = error is StorageCorruptException
+        ? 'This storage can\'t be read, and is left as it is. '
+              'Clear all to start over.\n$error'
+        : 'Could not read this storage.\n$error';
     return Container(
       width: double.infinity,
       color: colorScheme.errorContainer,

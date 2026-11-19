@@ -19,10 +19,7 @@ class JustStorageExampleApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'just_storage example',
-      theme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
-        useMaterial3: true,
-      ),
+      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
       home: const _HomePage(),
     );
   }
@@ -67,10 +64,8 @@ class _HomePageState extends State<_HomePage> {
   void _openAdmin() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => JUStorageAdminScreen(
-          standard: _storage,
-          secure: _secure,
-        ),
+        builder: (_) =>
+            JustStorageAdminScreen(standard: _storage, secure: _secure),
       ),
     );
   }
@@ -88,7 +83,9 @@ class _HomePageState extends State<_HomePage> {
 
     print('counter: $counter, pin: $pin');
 
-    if (mounted) setState(() => _status = 'Demo values written — open admin to inspect');
+    if (mounted) {
+      setState(() => _status = 'Demo values written — open admin to inspect');
+    }
   }
 
   @override

@@ -1,72 +1,77 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show internal, kIsWeb;
 import 'package:flutter/material.dart';
 
-import '../storage_provider.dart';
+import '../../core/core.dart';
+import '../storage_admin_controller.dart';
+import 'entries_tab.dart';
 
-/// Displays storage statistics, backend information, API feature overview, and
-/// a danger-zone section for clearing data.
+/// How many entries each storage holds, where they are kept and how they
+/// are protected, and clearing them.
+@internal
 class InfoTab extends StatelessWidget {
-  final StorageProvider provider;
-  const InfoTab({super.key, required this.provider});
+  /// The tab over [controller].
+  const InfoTab({super.key, required this.controller});
+
+  /// What the tab shows.
+  final StorageAdminController controller;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: provider,
+      listenable: controller,
       builder: (context, _) {
-        final stdCount = provider.standardEntries.length;
-        final secCount = provider.secureEntries.length;
+        final colorScheme = Theme.of(context).colorScheme;
+        final standardCount = controller.entries(secure: false).length;
+        final secureCount = controller.entries(secure: true).length;
+        final standardError = controller.error(secure: false);
+        final secureError = controller.error(secure: true);
 
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // ----------------------------------------------------------------
-            // Statistics
-            // ----------------------------------------------------------------
             _SectionCard(
               title: 'Statistics',
               children: [
                 _StatRow(
                   icon: Icons.storage_outlined,
                   label: 'Standard entries',
-                  value: stdCount.toString(),
-                  color: Theme.of(context).colorScheme.secondary,
+                  value: standardError == null ? '$standardCount' : '—',
+                  color: colorScheme.secondary,
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 _StatRow(
                   icon: Icons.lock_outlined,
                   label: 'Secure entries',
-                  value: secCount.toString(),
-                  color: Theme.of(context).colorScheme.tertiary,
+                  value: secureError == null ? '$secureCount' : '—',
+                  color: colorScheme.tertiary,
                 ),
               ],
             ),
             const SizedBox(height: 12),
 
-            // ----------------------------------------------------------------
-            // Backend
-            // ----------------------------------------------------------------
             _SectionCard(
-              title: 'Storage Backend',
+              title: 'Where the values are kept',
               children: [
                 ListTile(
                   leading: Icon(
                     kIsWeb ? Icons.web : Icons.folder_outlined,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: colorScheme.primary,
                   ),
                   title: Text(
-                    kIsWeb ? 'Browser localStorage' : 'File System',
+                    kIsWeb ? 'Browser storage' : 'Files',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   subtitle: Text(
                     kIsWeb
-                        ? 'Data persists in window.localStorage under '
-                            'prefixed keys:\n'
-                            '  just_storage:<key>  (standard)\n'
-                            '  just_secure:<key>   (encrypted)'
-                        : 'JSON files in the Application Support Directory:\n'
-                            '  just_storage.json          (standard)\n'
-                            '  just_secure_storage.enc    (encrypted)',
+                        ? 'localStorage, one item per value:\n'
+                              '  just_storage:<key>  (standard)\n'
+                              '  just_secure:<key>   (encrypted)\n'
+                              'The key: IndexedDB, database just_storage.'
+                        : 'In the app\'s support folder, unless another '
+                              'was given:\n'
+                              '  just_storage.json         (standard)\n'
+                              '  just_secure_storage.enc   (encrypted)\n'
+                              '  .storage.key              (the key)',
                   ),
                   isThreeLine: true,
                 ),
@@ -74,126 +79,94 @@ class InfoTab extends StatelessWidget {
             ),
             const SizedBox(height: 12),
 
-            // ----------------------------------------------------------------
-            // Encryption
-            // ----------------------------------------------------------------
             _SectionCard(
-              title: 'Encryption (Secure Storage)',
+              title: 'Encryption (secure storage)',
               children: [
-                _FeatureTile(
+                const _FeatureTile(
                   icon: Icons.lock,
                   label: 'Algorithm',
-                  detail: 'AES-256-GCM authenticated encryption',
+                  detail:
+                      'AES-256-GCM: each value encrypted on its own, with a '
+                      'random 12-byte nonce, bound to its key',
                 ),
                 _FeatureTile(
                   icon: Icons.key,
-                  label: 'Key management',
+                  label: 'Key',
                   detail: kIsWeb
-                      ? 'Master key auto-generated and stored in localStorage '
-                          '(base64-encoded 256-bit key)'
-                      : 'Master key stored in .storage.key '
-                          '(owner-read-only 0600 on POSIX)',
-                ),
-                const _FeatureTile(
-                  icon: Icons.shuffle,
-                  label: 'Nonces',
-                  detail: 'Fresh random 12-byte nonce per write — '
-                      'each entry is independently encrypted, '
-                      'nonce reuse never compromises other keys',
+                      ? 'A non-extractable Web Crypto key in IndexedDB: code '
+                            'on the page can use it but not read it. Kept raw '
+                            'in localStorage where IndexedDB is unavailable.'
+                      : 'A random 256-bit key in .storage.key, beside the '
+                            'values; readable only by its owner on desktop '
+                            'platforms. Anyone who can read the user\'s files '
+                            'can read it too.',
                 ),
                 const _FeatureTile(
                   icon: Icons.verified_user_outlined,
                   label: 'Integrity',
-                  detail: '128-bit GCM authentication tag per entry — '
-                      'any tampering raises a StorageException '
-                      'before plaintext is returned',
+                  detail:
+                      'A 16-byte GCM tag on every value: a value changed, or '
+                      'moved to another key, makes the storage throw a '
+                      'StorageCorruptException rather than return it',
                 ),
                 const _FeatureTile(
                   icon: Icons.swap_horiz,
-                  label: 'Atomic writes',
-                  detail: 'Write to .tmp file → rename over target — '
-                      'no partial writes, no data loss on crash',
+                  label: 'Saving',
+                  detail: kIsWeb
+                      ? 'Each value is one localStorage item, written in '
+                            'order'
+                      : 'A temporary file renamed over the old one: a crash '
+                            'leaves the old file or the new one, never half',
                 ),
               ],
             ),
             const SizedBox(height: 12),
 
-            // ----------------------------------------------------------------
-            // API features
-            // ----------------------------------------------------------------
-            _SectionCard(
-              title: 'API Features',
-              children: const [
+            const _SectionCard(
+              title: 'API',
+              children: [
                 _FeatureTile(
                   icon: Icons.data_object,
                   label: 'Typed JSON helpers',
-                  detail: 'readJson<T>(key, fromJson)\n'
-                      'writeJson<T>(key, value, toJson)\n'
-                      'Serialize / deserialize domain objects directly',
+                  detail:
+                      'readJson<T>(key, fromJson)\n'
+                      'writeJson<T>(key, value, toJson)',
                 ),
                 _FeatureTile(
                   icon: Icons.stream,
-                  label: 'Reactive streams',
-                  detail: 'watch(key) → Stream<String?>\n'
-                      'Emits the current value on subscribe, then on every '
-                      'subsequent write or delete',
+                  label: 'Watching a key',
+                  detail:
+                      'watch(key) → Stream<String?>\n'
+                      'The current value, then every change',
                 ),
                 _FeatureTile(
                   icon: Icons.list_alt_outlined,
-                  label: 'Bulk operations',
+                  label: 'All at once',
                   detail:
-                      'readAll() — snapshot of all entries as Map<String,String>\n'
-                      'clear()   — removes every entry atomically',
+                      'readAll(): a copy of every entry\n'
+                      'clear(): removes every entry; recovers a storage that '
+                      'can\'t be read',
                 ),
               ],
             ),
             const SizedBox(height: 12),
 
-            // ----------------------------------------------------------------
-            // Danger zone
-            // ----------------------------------------------------------------
             _SectionCard(
-              title: 'Danger Zone',
-              titleColor: Theme.of(context).colorScheme.error,
+              title: 'Danger zone',
+              titleColor: colorScheme.error,
               children: [
-                ListTile(
-                  leading: Icon(
-                    Icons.delete_forever,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                  title: Text(
-                    'Clear Standard Storage',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Permanently removes all $stdCount '
-                    'plain-text entr${stdCount == 1 ? 'y' : 'ies'}',
-                  ),
-                  onTap: stdCount > 0
-                      ? () => _confirmClear(context, isSecure: false)
-                      : null,
+                _ClearTile(
+                  controller: controller,
+                  secure: false,
+                  count: standardCount,
+                  error: standardError,
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
-                ListTile(
-                  leading: Icon(
-                    Icons.delete_forever,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                  title: Text(
-                    'Clear Secure Storage',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Permanently removes all $secCount '
-                    'encrypted entr${secCount == 1 ? 'y' : 'ies'}',
-                  ),
-                  onTap: secCount > 0
-                      ? () => _confirmClear(context, isSecure: true)
-                      : null,
+                _ClearTile(
+                  controller: controller,
+                  secure: true,
+                  count: secureCount,
+                  error: secureError,
                 ),
               ],
             ),
@@ -203,41 +176,58 @@ class InfoTab extends StatelessWidget {
       },
     );
   }
+}
 
-  Future<void> _confirmClear(
-    BuildContext context, {
-    required bool isSecure,
-  }) async {
-    final count = isSecure
-        ? provider.secureEntries.length
-        : provider.standardEntries.length;
-    final label = isSecure ? 'secure' : 'standard';
+class _ClearTile extends StatelessWidget {
+  const _ClearTile({
+    required this.controller,
+    required this.secure,
+    required this.count,
+    required this.error,
+  });
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Clear ${isSecure ? 'Secure' : 'Standard'} Storage'),
-        content: Text(
-          'This will permanently remove all $count '
-          'entr${count == 1 ? 'y' : 'ies'} from $label storage.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Clear'),
-          ),
-        ],
+  final StorageAdminController controller;
+  final bool secure;
+  final int count;
+  final Object? error;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final unreadable = error is StorageCorruptException;
+    final kind = secure ? 'encrypted' : 'plain-text';
+    return ListTile(
+      leading: Icon(Icons.delete_forever, color: colorScheme.error),
+      title: Text(
+        'Clear ${secure ? 'secure' : 'standard'} storage',
+        style: TextStyle(color: colorScheme.error),
       ),
+      subtitle: Text(
+        unreadable
+            ? 'Can\'t be read: removes what is there and starts over'
+            : 'Permanently removes all $count '
+                  '$kind entr${count == 1 ? 'y' : 'ies'}',
+      ),
+      onTap: count > 0 || unreadable ? () => _clear(context, unreadable) : null,
     );
-    if (confirmed != true || !context.mounted) return;
-    await provider.clearAll(isSecure: isSecure);
+  }
+
+  Future<void> _clear(BuildContext context, bool unreadable) async {
+    final confirmed = await confirmClear(
+      context,
+      count: count,
+      secure: secure,
+      unreadable: unreadable,
+    );
+    if (!confirmed || !context.mounted) return;
+    try {
+      await controller.clearAll(secure: secure);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not clear: $e')));
+    }
   }
 }
 
@@ -246,15 +236,15 @@ class InfoTab extends StatelessWidget {
 // =============================================================================
 
 class _SectionCard extends StatelessWidget {
-  final String title;
-  final Color? titleColor;
-  final List<Widget> children;
-
   const _SectionCard({
     required this.title,
     this.titleColor,
     required this.children,
   });
+
+  final String title;
+  final Color? titleColor;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
@@ -268,10 +258,10 @@ class _SectionCard extends StatelessWidget {
             child: Text(
               title.toUpperCase(),
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: titleColor ?? colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
+                color: titleColor ?? colorScheme.primary,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
             ),
           ),
           ...children,
@@ -287,17 +277,17 @@ class _SectionCard extends StatelessWidget {
 // =============================================================================
 
 class _StatRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
   const _StatRow({
     required this.icon,
     required this.label,
     required this.value,
     required this.color,
   });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -307,9 +297,9 @@ class _StatRow extends StatelessWidget {
       trailing: Text(
         value,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
       ),
     );
   }
@@ -320,24 +310,21 @@ class _StatRow extends StatelessWidget {
 // =============================================================================
 
 class _FeatureTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String detail;
-
   const _FeatureTile({
     required this.icon,
     required this.label,
     required this.detail,
   });
 
+  final IconData icon;
+  final String label;
+  final String detail;
+
   @override
   Widget build(BuildContext context) {
     return ListTile(
       leading: Icon(icon, size: 20),
-      title: Text(
-        label,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(detail),
       isThreeLine: detail.contains('\n'),
     );

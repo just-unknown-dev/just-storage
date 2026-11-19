@@ -1,10 +1,52 @@
-## [1.2.2] - Unreleased
+## [2.0.0] - Unreleased
+
+An audit of the whole package: data that could be lost or overwritten without a word now isn't, the encrypted format binds each value to its key, the web key can no longer be read by scripts, and the code is laid out by feature. Requires Dart ^3.11.0 and Flutter >=3.47.1.
+
+### Breaking
+
+- **A storage that can't be read throws `StorageCorruptException`** (new, a `StorageException`) instead of starting empty — which the next write then saved over the old file. This covers a file that isn't the JSON the storage writes (or holds values that aren't strings), an encrypted value that fails its check, and a missing or damaged key. What was found is left untouched; `clear()` starts over and works on a storage that can't be read. The exception names the file (`source`) and, when only some values fail, their `keys`.
+- **The encrypted format is version 2**, on native platforms and on the web: each value is sealed with its key as additional authenticated data, so a value moved to another key fails its check. Native files are `{"v": 2, "entries": {...}}`; web items are `{"v": 2, "n": ..., "ct": ...}`. Version 1 is still read, and written again as version 2 straight away; 1.x can't read version 2.
+- **The web key moves to IndexedDB** as a non-extractable `CryptoKey`, out of `localStorage` where any script could read its bytes. A 1.x key is moved, and its raw copy removed, the first time it is used. Where IndexedDB is unavailable the key stays raw in `localStorage`.
+- **The admin screen is `JustStorageAdminScreen`** (was `JUStorageAdminScreen`), and its state `StorageAdminController` (was `StorageProvider`), with `entries(secure:)`, `error(secure:)`, `refresh()`, `writeEntry`, `deleteEntry` and `clearAll` (which now throw what the storage throws). `EntriesTab` and `InfoTab` are internal.
+- **`watch()` returns a broadcast stream**, as its documentation always said: it can be listened to many times, each listener getting its own first value. It was a single-subscription stream. Streams end when the storage is disposed.
+- **`dispose()` returns a `Future`** on `FileStorage` and `WebStorage` too, and waits for the writes, deletes and clears called so far. `EncryptedFileStorage.dispose(destroyKey: true)` is now `wipe()`, also on `WebSecureStorage`.
+- **`readJson` throws a `StorageException`** for a value that isn't a JSON object, as it already did; the documentation said it returned `null`.
+- `FileStorage(directory)` and `EncryptedFileStorage(directory)` keep their constructors; `StorageKeyManager`, `AesGcmCipher` and `WebAesGcmCipher` are internal now (they were never exported).
+- Dart ^3.11.0 (was >=3.3.0), Flutter >=3.47.1 (was >=3.19.0), path_provider ^2.1.5, web ^1.1.1. pointycastle may be 3.x or 4.x (`>=3.7.3 <5.0.0`, was ^3.7.3): 4.x is the latest, and the `encrypt` package still needs 3.x.
+
+### Added
+
+- `JustKeyValueStorage`, what `JustStandardStorage` and `JustSecureStorage` share, with `readJson` and `writeJson` built on `read` and `write` for any implementation.
+- `StorageCorruptException`, with `source` and `keys`.
+- `EncryptedFileStorage.wipe()` and `WebSecureStorage.wipe()`: remove every value and delete the key, so a copy of the old data can't be decrypted.
+- `FileStorage.file`, `FileStorage.directory`, `FileStorage.fileName`; `EncryptedFileStorage.file`, `.keyFile`, `.directory`, `.fileName`; `WebStorage.prefix`, `WebSecureStorage.prefix`.
+- On the web, changes made in another tab of the page reach this tab's values and `watch` streams.
+- The admin screen hides secure values until shown (and searches only their keys meanwhile), can clear a storage that can't be read, and keeps showing the standard storage when the secure one fails.
+
+### Changed
+
+- **Writes made close together share one save** instead of rewriting the file once each; a write of the value the file already holds saves nothing.
+- Only the encrypted values that changed are encrypted again when the file is saved, instead of every value on every write.
+- The key file is written to a temporary file, narrowed to its owner, then renamed into place: it never exists half-written, or with wider permissions. Of two storages, or two processes, making the key at once, one makes it and the other uses it.
+- The key file is owner-only on Windows too (its access list names only the user), and is no longer `chmod`ed on Android and iOS, whose app folders are private already (iOS can't start a process).
+- The code is laid out by feature — `core/`, `file/`, `web/`, `ui/` — with a layout guard test, and every public name is documented (`public_member_api_docs`).
 
 ### Fixed
 
-- **Lost keys with several handles** — `JustStorage.standard()` and `JustStorage.encrypted()` now return one shared instance per resolved directory instead of a new `FileStorage` / `EncryptedFileStorage` on every call. Each instance caches the whole store and rewrites the file on every write, so two handles over the same directory silently dropped each other's keys. Different spellings of one directory (relative paths, `..` segments, letter case on Windows) map to the same instance. Because the instance is shared, `dispose()` now affects every holder.
-- **Web factory** — `JustStorage.standard()` and `JustStorage.encrypted()` on web also return a single shared instance, so a second `WebSecureStorage` no longer serves stale cached values and `watch` streams see writes made through any handle.
-- **Encrypted temporary file collision** — `EncryptedFileStorage` now gives its `.tmp` file the same microsecond suffix that `FileStorage` received in 1.2.1.
+- **Lost keys with several handles** — `JustStorage.standard()` and `JustStorage.encrypted()` return one shared instance per folder instead of a new `FileStorage` / `EncryptedFileStorage` on every call. Each instance keeps the whole store and rewrites the file on every write, so two handles over the same folder dropped each other's keys. Different spellings of one folder (relative, `..`, a trailing separator, letter case on Windows) share an instance. On the web both factories return one instance too, so a second `WebSecureStorage` no longer serves stale values.
+- **A failed save left the value in memory**: the write threw, but reads returned the unsaved value, and the next successful save wrote it. The keys a failed save held now go back to what the file holds, and watchers never hear of them.
+- **A write and a delete of one key on the web could land out of order**, bringing a deleted value back after a reload: web secure writes are now saved one at a time, in order.
+- **`dispose()` didn't wait** for the save under way, so a value written just before closing the app could be lost.
+- **Encrypted values with malformed fields were dropped silently** on native (skipped on load, then left out of the next save), and on the web every undecryptable value was skipped. Both now throw `StorageCorruptException`, leaving the data alone.
+- **A missing key file was replaced by a new key** while the file held values sealed with the old one, making them unreadable for good. No key is made while values need the old one.
+- **A key file half-written by a crash** was taken for a damaged key and failed forever; an empty key file another process is still writing is now waited for.
+- **Temporary files left by a crash** (`*.tmp.*`) piled up beside the store; ones older than a minute are swept when the store is opened. A failed save deletes its own.
+- **Encrypted temporary file collision** — `EncryptedFileStorage`'s `.tmp` file gets a unique name, as `FileStorage`'s did in 1.2.1. Names now carry the process id too.
+- **`FileStorage.watch` failed silently**: an error loading the file escaped as an uncaught error instead of reaching the listener.
+- **A failure while loading was kept forever** (the failed load was cached); the next call now reads the file again, so a file put right is picked up.
+- **Admin screen**: it spun forever when a storage failed to load; it threw "used after being disposed" when closed while loading; it didn't let you save an empty value; the danger zone couldn't clear a storage that couldn't be read; and its info tab claimed that nonce reuse "never compromises other keys" and that the key file is `0600` on Android and iOS.
+- **Docs**: the README said the web used pointycastle (it uses Web Crypto), that nonce reuse is impossible, and that a compromised nonce affects one entry only (a reused GCM nonce exposes the authentication key for every value). The security model now says what the encryption protects against and what it doesn't — in particular that the key sits beside the values, and backups include both.
+- The examples are formatted (`example.dart`, `auth_service_example.dart`, `settings_service_example.dart`), so the CI's format check passes; the CI workflow runs on `release/**` branches (it watched `release-v*.*.*`, which no branch matched), on Flutter 3.47.9, and runs the web tests in Chrome.
 
 ---
 

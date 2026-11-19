@@ -1,30 +1,16 @@
-/// UI components for just_storage admin interface.
-///
-/// Provides a complete Flutter UI for inspecting and managing stored data:
-/// - Standard (plain key-value) storage viewer with search, add, edit, delete
-/// - Secure (AES-256-GCM encrypted) storage viewer with the same operations
-/// - Info tab with statistics, backend details, and danger-zone clear actions
-///
-/// ## Quick start
+/// An admin screen for just_storage: look at, search, add, edit and delete
+/// the values of a standard and a secure storage while the app runs.
 ///
 /// ```dart
 /// import 'package:just_storage/ui.dart';
 ///
-/// Navigator.of(context).push(MaterialPageRoute(
-///   builder: (_) => const JUStorageAdminScreen(),
+/// Navigator.of(context).push(MaterialPageRoute<void>(
+///   builder: (_) => const JustStorageAdminScreen(),
 /// ));
 /// ```
 ///
-/// Pass existing storage instances to inspect specific directories / localStorage
-/// namespaces (useful when your app already wires up its own instances):
-///
-/// ```dart
-/// JUStorageAdminScreen(
-///   standard: myStandard,
-///   secure: mySecure,
-/// )
-/// ```
+/// It shows secure values in plain text when asked to: keep it out of
+/// release builds, or behind your own developer switch.
 library;
 
-export 'src/ui/storage_provider.dart';
-export 'src/ui/ju_storage_admin_screen.dart';
+export 'src/ui/ui.dart';
