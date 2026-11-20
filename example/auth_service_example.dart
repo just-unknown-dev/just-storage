@@ -23,11 +23,11 @@ class OAuthTokens {
   });
 
   factory OAuthTokens.fromJson(Map<String, dynamic> json) => OAuthTokens(
-        accessToken: json['access_token'] as String,
-        refreshToken: json['refresh_token'] as String,
-        expiresAt: DateTime.parse(json['expires_at'] as String),
-        username: json['username'] as String,
-      );
+    accessToken: json['access_token'] as String,
+    refreshToken: json['refresh_token'] as String,
+    expiresAt: DateTime.parse(json['expires_at'] as String),
+    username: json['username'] as String,
+  );
 
   final String accessToken;
   final String refreshToken;
@@ -37,11 +37,11 @@ class OAuthTokens {
   bool get isExpired => DateTime.now().isAfter(expiresAt);
 
   Map<String, dynamic> toJson() => {
-        'access_token': accessToken,
-        'refresh_token': refreshToken,
-        'expires_at': expiresAt.toIso8601String(),
-        'username': username,
-      };
+    'access_token': accessToken,
+    'refresh_token': refreshToken,
+    'expires_at': expiresAt.toIso8601String(),
+    'username': username,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +144,9 @@ Future<void> runAuthExample(JustSecureStorage secure) async {
 
   // Store a supplementary PKCE code verifier.
   await service.storeSecret(
-      'pkce_verifier', 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1g');
+    'pkce_verifier',
+    'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1g',
+  );
   assert(await service.readSecret('pkce_verifier') != null);
   await service.deleteSecret('pkce_verifier');
 

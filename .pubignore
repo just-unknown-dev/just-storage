@@ -1,25 +1,48 @@
+# pub ignores .gitignore when this file exists, so everything that must
+# not be published is listed here.
+
 # IDE and editor files
 .idea/
 .vscode/
 *.iml
+*.ipr
+*.iws
 
-# Build artifacts
+# Build and tool output (anchored: extension/devtools/build/ is published)
 .dart_tool/
-build/
+/build/
+/coverage/
+**/doc/api/
 .flutter-plugins
 .flutter-plugins-dependencies
+example/build/
+example/.dart_tool/
+
+# Repository files
+.git/
+.github/
+.gitignore
 .metadata
 
-# Git
-.git/
-.gitignore
-.gitattributes
-
-# Development files
-pubspec.lock
+# Local development
+/pubspec.lock
+/devtools_options.yaml
+pubspec_overrides.yaml
+example/pubspec.lock
 
 # Temporary files
-*.tmp
+*.class
 *.log
+*.pyc
+*.swp
+*.tmp
 .DS_Store
-Thumbs.db
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# The DevTools extension's source; its build in extension/devtools/build/
+# is published (build it first: devtools_extension/README.md)
+devtools_extension/

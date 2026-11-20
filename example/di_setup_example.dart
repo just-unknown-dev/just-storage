@@ -23,13 +23,10 @@ library;
 // Future<void> init() async {
 //   // ─── Storage layer ────────────────────────────────────────────────────
 //   //
-//   // Resolve the app-private support directory once during app startup.
-//   // Both stores share the same directory; they write to different files:
+//   // Both stores live in the app's support directory, in different files:
 //   //   just_storage.json         ← FileStorage
 //   //   just_secure_storage.enc   ← EncryptedFileStorage
-//   //   .storage.key              ← AES-256 master key (managed internally)
-//
-//   final storageDir = await getApplicationSupportDirectory();
+//   //   .storage.key              ← AES-256 key (managed internally)
 //
 //   final standard = await JustStorage.standard();
 //   final secure   = await JustStorage.encrypted();
@@ -64,7 +61,7 @@ library;
 //     final secure = EncryptedFileStorage(dir);
 //
 // • If you need separate namespaces (e.g. player A vs player B data), just
-//   pass different subdirectories:
+//   pass different subdirectories; each gets its own shared instance:
 //
 //     final playerDir = Directory('${baseDir.path}/player_${userId}');
-//     final playerStorage = FileStorage(playerDir);
+//     final playerStorage = await JustStorage.standard(playerDir);

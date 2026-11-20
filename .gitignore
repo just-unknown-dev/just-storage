@@ -29,3 +29,7 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 /build/
 /coverage/
+
+# The DevTools extension's build: published, not committed (see
+# devtools_extension/README.md).
+/extension/devtools/build/
