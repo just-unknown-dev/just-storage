@@ -9,6 +9,7 @@ import 'package:just_storage/just_storage.dart';
 import 'package:just_storage/ui.dart';
 
 import '../support/memory_storage.dart';
+import '../support/workbench_support.dart';
 
 const _wide = Size(1400, 900);
 const _medium = Size(1000, 800);
@@ -54,8 +55,8 @@ void main() {
           controller: controller,
           readOnly: readOnly,
           stores: [
-            StorageAdminStore('Standard', standard),
-            StorageAdminStore('Secure', secure),
+            adminStore('Standard', standard),
+            adminStore('Secure', secure),
           ],
         ),
       ),
@@ -514,10 +515,7 @@ void main() {
 
   testWidgets('a shared controller drives the screen', (tester) async {
     final controller = StorageAdminController(
-      stores: [
-        StorageAdminStore('Standard', standard),
-        StorageAdminStore('Secure', secure),
-      ],
+      stores: [adminStore('Standard', standard), adminStore('Secure', secure)],
     );
     addTearDown(controller.dispose);
     await show(tester, controller: controller);
@@ -533,7 +531,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: JustStorageAdminScreen(
-          stores: [StorageAdminStore('Standard', standard)],
+          stores: [adminStore('Standard', standard)],
         ),
       ),
     );

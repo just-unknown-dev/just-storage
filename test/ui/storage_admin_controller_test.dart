@@ -4,6 +4,7 @@ import 'package:just_storage/src/ui/admin_utils.dart';
 import 'package:just_storage/ui.dart';
 
 import '../support/memory_storage.dart';
+import '../support/workbench_support.dart';
 
 void main() {
   late MemoryStandardStorage memory;
@@ -12,7 +13,7 @@ void main() {
 
   setUp(() async {
     memory = MemoryStandardStorage()..values.addAll({'a': '1', 'b': '2'});
-    store = StorageAdminStore('Memory', memory);
+    store = adminStore('Memory', memory);
     controller = StorageAdminController(stores: [store]);
     await controller.refresh();
   });
@@ -120,24 +121,27 @@ void main() {
   testWidgets('follows changes made elsewhere, and marks them for a moment', (
     tester,
   ) async {
-    final live = StorageAdminController(stores: [store]);
+    // A store of the test's own, so a remote one hears changes in the
+    // test's zone.
+    final watched = adminStore('Memory', memory);
+    final live = StorageAdminController(stores: [watched]);
     await live.refresh();
     var told = 0;
     live.addListener(() => told++);
     memory.changeBehindItsBack('new', 'value');
     await tester.pump(const Duration(milliseconds: 150));
     await tester.pump();
-    expect(live.entriesOf(store)['new'], 'value');
-    expect(live.changedAt(store, 'new'), isNotNull);
+    expect(live.entriesOf(watched)['new'], 'value');
+    expect(live.changedAt(watched, 'new'), isNotNull);
     expect(told, greaterThan(0));
     await tester.pump(StorageAdminController.recentChange);
-    expect(live.changedAt(store, 'new'), isNull);
+    expect(live.changedAt(watched, 'new'), isNull);
     live.dispose();
   });
 
   test('a storage that fails to open is an error, and opens later', () async {
     var fail = true;
-    final flaky = StorageAdminStore('Flaky', _FailingOnce(() => fail));
+    final flaky = adminStore('Flaky', _FailingOnce(() => fail));
     final c = StorageAdminController(stores: [flaky]);
     addTearDown(c.dispose);
     await c.refresh();
@@ -146,6 +150,33 @@ void main() {
     await c.refresh();
     expect(c.errorOf(flaky), isNull);
   });
+
+  test(
+    'a new list of storages keeps what it knew of those that stay',
+    () async {
+      final other = adminStore(
+        'Other',
+        MemoryStandardStorage()..values['x'] = 'y',
+      );
+      controller.select(store, key: 'a');
+      controller.setStores([other, store]);
+      expect(controller.stores, [other, store]);
+      expect(controller.entriesOf(store), {'a': '1', 'b': '2'});
+      expect(controller.selectedStore, store);
+      expect(controller.selectedKey, 'a');
+      await controller.refresh(other);
+      expect(controller.entriesOf(other), {'x': 'y'});
+
+      controller.setStores([other]);
+      expect(controller.selectedStore, other);
+      expect(controller.selectedKey, isNull);
+      expect(() => controller.entriesOf(store), throwsArgumentError);
+      expect(
+        () => controller.setStores([other, adminStore('Other', memory)]),
+        throwsArgumentError,
+      );
+    },
+  );
 
   test('wipe is offered only where the storage can be wiped', () {
     expect(controller.canWipe(store), isFalse);

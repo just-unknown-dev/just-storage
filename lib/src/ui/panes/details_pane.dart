@@ -8,11 +8,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/admin_types.dart';
 import '../../core/core.dart';
-import '../../file/admin_support.dart'
-    if (dart.library.js_interop) '../../web/admin_support.dart'
-    as platform;
 import '../admin_style.dart';
 import '../admin_utils.dart';
+import '../backend/store_access.dart';
 import '../dialogs/entry_dialogs.dart';
 import '../dialogs/transfer_dialogs.dart';
 import '../storage_admin_controller.dart';
@@ -51,7 +49,7 @@ class _DetailsPaneState extends State<DetailsPane> {
       final storage = c.storageOf(widget.store);
       _description = storage == null
           ? Future.value()
-          : platform.describeStorage(storage).catchError((Object _) => null);
+          : describeStorage(storage).catchError((Object _) => null);
     }
     return _description!;
   }
@@ -166,10 +164,12 @@ class _DetailsPaneState extends State<DetailsPane> {
                 [
                   ?store.description,
                   if (description == null)
-                    c.storageOf(store) == null
-                        ? 'Not opened yet'
-                        : 'A ${c.storageOf(store).runtimeType}: it says no '
-                              'more about where it keeps them',
+                    switch (c.storageOf(store)) {
+                      null => 'Not opened yet',
+                      final storage =>
+                        'A ${storageTypeName(storage)}: it says no more '
+                            'about where it keeps them',
+                    },
                   if (description?.modified case final at?)
                     'Last saved ${formatDateTime(at)}',
                 ].join('\n'),

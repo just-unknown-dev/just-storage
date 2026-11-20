@@ -32,6 +32,7 @@ An audit of the whole package: data that could be lost or overwritten without a 
   - **Export and import**: JSON with the storage's name, to copy or save (a `just_storage` folder in Downloads, or a browser download); secure exports warn that values come out decrypted and preview them masked. Import pastes, picks a file (web), reads a path (desktop) or an earlier export; previews what is new and what exists; merges, adds only new keys, or replaces all.
   - **Details**: entries, sizes, largest value and value types; where the values are — folder, file, key file, or the browser origin, prefix and key — with paths to copy; what protects them; clear, and wipe (destroying the key) for secure storages, each confirmed by typing the storage's name.
   - **`readOnly: true`**: looking, searching, copying and exporting only.
+- **The workbench in Flutter DevTools**: in debug builds the same workbench runs as the **just_storage** tab of Flutter DevTools, on the storages of the running app, with a link to it in the console when the first storage opens. It shows the storages `JustStorage.standard()` and `JustStorage.encrypted()` opened, and any given to `JustStorage.debugShowInDevTools(name, storage)`; it follows the app's changes, gathered into a few updates a second, and sends nothing while no workbench is connected. `JustStorage.debugDevToolsWorkbench = false` turns it off. Release and profile builds don't have it.
 
 ### Changed
 

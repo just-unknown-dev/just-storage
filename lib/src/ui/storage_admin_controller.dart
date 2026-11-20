@@ -3,11 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../core/core.dart';
-import '../file/admin_support.dart'
-    if (dart.library.js_interop) '../web/admin_support.dart'
-    as platform;
 import '../file/file.dart' if (dart.library.js_interop) '../web/web.dart';
 import 'admin_utils.dart' as utils;
+import 'backend/store_access.dart';
 import 'just_storage_admin_screen.dart';
 import 'store_view.dart';
 
@@ -76,11 +74,19 @@ class StorageAdminController extends ChangeNotifier {
   StorageAdminController({
     List<StorageAdminStore>? stores,
     this.readOnly = false,
-  }) : stores = List.unmodifiable(
+  }) : _stores = List.unmodifiable(
          stores ?? [StorageAdminStore.standard(), StorageAdminStore.secure()],
        ) {
+    _checkNames(_stores);
+    for (final store in _stores) {
+      _states[store] = _StoreState(store);
+    }
+    _selected = _stores.firstOrNull;
+  }
+
+  static void _checkNames(List<StorageAdminStore> stores) {
     final names = <String>{};
-    for (final store in this.stores) {
+    for (final store in stores) {
       if (!names.add(store.name)) {
         throw ArgumentError.value(
           store.name,
@@ -88,19 +94,22 @@ class StorageAdminController extends ChangeNotifier {
           'Two storages share this name',
         );
       }
-      _states[store] = _StoreState(store);
     }
-    _selected = this.stores.firstOrNull;
   }
 
   /// The storages shown, in order.
-  final List<StorageAdminStore> stores;
+  List<StorageAdminStore> get stores => _stores;
+  List<StorageAdminStore> _stores;
 
   /// Whether nothing can be changed: no writing, deleting, clearing or
   /// importing. Looking, searching, copying and exporting still work.
   final bool readOnly;
 
   final Map<StorageAdminStore, _StoreState> _states = {};
+
+  /// The states of storages no longer shown: their views may still be
+  /// listened to until the screen rebuilds, so they go with the controller.
+  final List<_StoreState> _retired = [];
   StorageAdminStore? _selected;
   String? _selectedKey;
   int _busy = 0;
@@ -150,7 +159,7 @@ class StorageAdminController extends ChangeNotifier {
   /// even a copy of what it held can be decrypted again.
   bool canWipe(StorageAdminStore store) {
     final storage = _stateOf(store).storage;
-    return storage != null && platform.canWipe(storage);
+    return storage != null && canWipeStorage(storage);
   }
 
   /// The storage selected; the first one at the start.
@@ -175,6 +184,40 @@ class StorageAdminController extends ChangeNotifier {
     if (key == _selectedKey) return;
     _selectedKey = key;
     _notify();
+  }
+
+  /// Shows [stores] from now on: those shown already keep what the screen
+  /// knows of them, new ones are read, and the selection moves to the
+  /// first storage when its own goes. A workbench connected to an app
+  /// learns of the app's storages as it opens them.
+  @internal
+  void setStores(List<StorageAdminStore> stores) {
+    _checkNames(stores);
+    final kept = stores.toSet();
+    for (final store in [..._states.keys]) {
+      if (kept.contains(store)) continue;
+      final s = _states.remove(store)!;
+      s.readTimer?.cancel();
+      unawaited(s.changes?.cancel());
+      s.changes = null;
+      _retired.add(s);
+    }
+    final added = [
+      for (final store in stores)
+        if (!_states.containsKey(store)) store,
+    ];
+    for (final store in added) {
+      _states[store] = _StoreState(store);
+    }
+    _stores = List.unmodifiable(stores);
+    if (_selected == null || !_states.containsKey(_selected)) {
+      _selected = _stores.firstOrNull;
+      _selectedKey = null;
+    }
+    _notify();
+    for (final store in added) {
+      unawaited(refresh(store));
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -393,10 +436,10 @@ class StorageAdminController extends ChangeNotifier {
   /// write makes a new key.
   Future<void> wipe(StorageAdminStore store) =>
       _change(store, (storage, s) async {
-        if (!platform.canWipe(storage)) {
+        if (!canWipeStorage(storage)) {
           throw StateError('"${store.name}" can\'t be wiped.');
         }
-        await platform.wipeStorage(storage);
+        await wipeStorage(storage);
         s.view.clearChecked();
         if (store == _selected) _selectedKey = null;
       });
@@ -447,7 +490,7 @@ class StorageAdminController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _fadeTimer?.cancel();
-    for (final s in _states.values) {
+    for (final s in [..._states.values, ..._retired]) {
       s.readTimer?.cancel();
       unawaited(s.changes?.cancel());
       s.changes = null;

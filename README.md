@@ -25,14 +25,14 @@ No storage wrappers (`shared_preferences`, `flutter_secure_storage`, …): on An
 | **`watch()` stream per key** | ✅ broadcast | ✅ broadcast |
 | **`changes` stream of the whole storage** | ✅ broadcast | ✅ broadcast |
 | **Changes from other tabs (web)** | ✅ | ✅ |
-| **Admin screen** | ✅ `package:just_storage/ui.dart`, desktop and phone | ✅ values hidden until shown |
+| **Admin screen** | ✅ `package:just_storage/ui.dart`, desktop and phone, and a Flutter DevTools tab | ✅ values hidden until shown |
 
 ### When to choose just_storage
 
 - You want **both** standard and secure storage behind one API.
 - You need encrypted storage on **Flutter web** too, JS or WebAssembly.
 - You want **authenticated encryption** (AES-256-GCM) that detects tampering, not only secrecy.
-- You want an **admin screen** to look at storage during development.
+- You want an **admin screen** to look at storage during development, in the app or in Flutter DevTools.
 - You prefer **no code generation**: no adapters, no `build_runner`.
 - You want a **stream per key** without a full state library.
 
@@ -206,6 +206,26 @@ On a wide screen (840 px or more) a sidebar lists the storages beside the select
 | **Details** | Counts, sizes and value types; the file, folder, key file, or browser storage behind each storage; clear, and wipe (destroying the key) for secure storages |
 
 Pass a `StorageAdminController` to share the screen's state or drive it from code. The screen can show and export secure values in plain text: keep it out of release builds, or behind your own developer switch, and use `readOnly: true` where it must not change anything.
+
+### The workbench in Flutter DevTools
+
+The same workbench runs in Flutter DevTools, on the storages of the app DevTools is connected to — nothing to add to your app. Run it in debug mode; when it opens its first storage, the console shows a link to the tab:
+
+```text
+╔════════════════════════════════════════════════════════════════════╗
+║ Just Storage workbench (debug builds)                              ║
+╟────────────────────────────────────────────────────────────────────╢
+║ Open it in Flutter DevTools, the "just_storage" tab:               ║
+║ http://127.0.0.1:54321/aBcD=/devtools/just_storage_ext?uri=ws://…  ║
+║ …                                                                  ║
+╚════════════════════════════════════════════════════════════════════╝
+```
+
+Or open DevTools as usual (the link `flutter run` prints, or "Dart: Open DevTools" in VS Code) and choose the **just_storage** tab; DevTools asks once whether to enable it. On a phone or emulator use the DevTools link `flutter run` prints: the console link may carry the device's port.
+
+- It shows every storage `JustStorage.standard()` and `JustStorage.encrypted()` opened — named "Standard" and "Secure", or after the folder given — and those you add: `JustStorage.debugShowInDevTools('Game saves', savesStorage)`.
+- It follows the app's changes as they happen, gathered into a few updates a second. Exports download in the browser, and imports pick a file there.
+- It works in debug builds only: release and profile builds register nothing. While the tab isn't open the app does no work for it. Turn it off with `JustStorage.debugDevToolsWorkbench = false` before the first storage opens.
 
 ---
 
