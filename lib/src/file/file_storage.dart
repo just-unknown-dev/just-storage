@@ -60,6 +60,9 @@ class FileStorage extends JustStandardStorage {
   @override
   Stream<String?> watch(String key) => _store.watch(key);
 
+  @override
+  Stream<StorageChange> get changes => _store.changes;
+
   /// Waits for the saves under way, then ends every [watch] stream and lets
   /// go of the values in memory.
   ///

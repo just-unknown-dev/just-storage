@@ -8,6 +8,7 @@ import 'package:just_storage/just_storage.dart';
 mixin MemoryStorage on JustKeyValueStorage {
   final Map<String, String> values = {};
   final _changes = StreamController<(String, String?)>.broadcast(sync: true);
+  final _storageChanges = StreamController<StorageChange>.broadcast();
 
   /// Thrown by every call while set, as by a storage that can't be read.
   Object? failure;
@@ -34,6 +35,7 @@ mixin MemoryStorage on JustKeyValueStorage {
     await _ready();
     values[key] = value;
     _changes.add((key, value));
+    _storageChanges.add(StorageChange(key, value));
   }
 
   @override
@@ -41,6 +43,7 @@ mixin MemoryStorage on JustKeyValueStorage {
     await _ready();
     values.remove(key);
     _changes.add((key, null));
+    _storageChanges.add(StorageChange(key, null));
   }
 
   @override
@@ -52,6 +55,21 @@ mixin MemoryStorage on JustKeyValueStorage {
     for (final key in keys) {
       _changes.add((key, null));
     }
+    _storageChanges.add(const StorageChange.cleared());
+  }
+
+  @override
+  Stream<StorageChange> get changes => _storageChanges.stream;
+
+  /// Changes [key] as another tab or process would: without the storage
+  /// itself reporting it, unless [report].
+  void changeBehindItsBack(String key, String? value, {bool report = true}) {
+    if (value == null) {
+      values.remove(key);
+    } else {
+      values[key] = value;
+    }
+    if (report) _storageChanges.add(StorageChange(key, value));
   }
 
   @override

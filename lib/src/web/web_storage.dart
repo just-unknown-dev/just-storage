@@ -26,6 +26,9 @@ class WebStorage extends JustStandardStorage {
   static const String prefix = 'just_storage:';
 
   final ValueWatchers _watchers = ValueWatchers();
+  late final ChangeListeners _changes = ChangeListeners(
+    onListen: _listenToOtherTabs,
+  );
   StreamSubscription<web.StorageEvent>? _otherTabs;
 
   static web.Storage get _local {
@@ -58,6 +61,7 @@ class WebStorage extends JustStandardStorage {
       throw StorageException('Could not write "$key".', cause: e);
     }
     _watchers.changed(key, value);
+    _changes.add(StorageChange(key, value));
   }
 
   @override
@@ -70,6 +74,7 @@ class WebStorage extends JustStandardStorage {
       throw StorageException('Could not delete "$key".', cause: e);
     }
     _watchers.changed(key, null);
+    _changes.add(StorageChange(key, null));
   }
 
   @override
@@ -89,6 +94,7 @@ class WebStorage extends JustStandardStorage {
     for (final key in {...removed, ..._watchers.keys}) {
       _watchers.changed(key, null);
     }
+    _changes.add(const StorageChange.cleared());
   }
 
   @override
@@ -119,12 +125,16 @@ class WebStorage extends JustStandardStorage {
     );
   }
 
-  /// Ends every [watch] stream and stops listening to other tabs. The
-  /// storage still works afterwards.
+  @override
+  Stream<StorageChange> get changes => _changes.stream;
+
+  /// Ends every [watch] and [changes] stream and stops listening to other
+  /// tabs. The storage still works afterwards.
   Future<void> dispose() async {
     await _otherTabs?.cancel();
     _otherTabs = null;
     _watchers.closeAll();
+    _changes.closeAll();
   }
 
   /// The prefixed names in [local], listed before any is removed.
@@ -149,8 +159,11 @@ class WebStorage extends JustStandardStorage {
       for (final key in [..._watchers.keys]) {
         _watchers.changed(key, area.getItem('$prefix$key'));
       }
+      _changes.add(const StorageChange.cleared());
     } else if (name.startsWith(prefix)) {
-      _watchers.changed(name.substring(prefix.length), event.newValue);
+      final key = name.substring(prefix.length);
+      _watchers.changed(key, event.newValue);
+      _changes.add(StorageChange(key, event.newValue));
     }
   }
 }

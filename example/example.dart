@@ -7,7 +7,8 @@ import 'package:just_storage/ui.dart';
 /// Flutter app example demonstrating just_storage and the built-in admin UI.
 ///
 /// Tap "Open Storage Admin" to inspect and edit standard and secure storage
-/// entries from a live running app.
+/// entries from a live running app: a sidebar and panels on a wide window,
+/// pages on a phone.
 void main() {
   runApp(const JustStorageExampleApp());
 }
@@ -50,6 +51,10 @@ class _HomePageState extends State<_HomePage> {
     // Seed a few demo values so the admin screen has something to show.
     await storage.write('theme', 'dark');
     await storage.write('language', 'en');
+    await storage.write(
+      'profile',
+      '{"name":"Ada","level":3,"unlocked":["forest","caves"]}',
+    );
     await secure.write('access_token', 'eyJhbGciOiJIUzI1NiJ9.demo');
 
     if (mounted) {
@@ -62,11 +67,11 @@ class _HomePageState extends State<_HomePage> {
   }
 
   void _openAdmin() {
+    // JustStorage hands everyone the same instances, so the screen's own
+    // StorageAdminStore.standard() and .secure() are these two; pass
+    // `stores:` to show others.
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            JustStorageAdminScreen(standard: _storage, secure: _secure),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const JustStorageAdminScreen()),
     );
   }
 

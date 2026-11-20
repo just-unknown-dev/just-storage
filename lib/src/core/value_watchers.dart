@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show internal;
 
 import 'just_key_value_storage.dart';
+import 'storage_change.dart';
 
 /// The listeners of a storage's [JustKeyValueStorage.watch] streams, by key.
 ///
@@ -80,6 +81,43 @@ final class ValueWatchers {
     _byKey.clear();
     for (final listener in all) {
       listener.controller.closeSync();
+    }
+  }
+}
+
+/// The listeners of a storage's [JustKeyValueStorage.changes] stream.
+@internal
+final class ChangeListeners {
+  /// Listeners for changes; [onListen] runs whenever one starts listening.
+  ChangeListeners({this.onListen});
+
+  /// Runs when a listener starts: a web storage starts hearing other tabs.
+  final void Function()? onListen;
+
+  final Set<MultiStreamController<StorageChange>> _listeners = {};
+
+  /// A broadcast stream of the changes [add] reports from now on.
+  Stream<StorageChange> get stream => Stream<StorageChange>.multi((controller) {
+    _listeners.add(controller);
+    controller.onCancel = () {
+      _listeners.remove(controller);
+    };
+    onListen?.call();
+  }, isBroadcast: true);
+
+  /// Sends [change] to everyone listening, asynchronously.
+  void add(StorageChange change) {
+    for (final listener in [..._listeners]) {
+      listener.add(change);
+    }
+  }
+
+  /// Ends every stream handed out so far.
+  void closeAll() {
+    final all = [..._listeners];
+    _listeners.clear();
+    for (final listener in all) {
+      listener.close();
     }
   }
 }

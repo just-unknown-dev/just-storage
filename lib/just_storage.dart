@@ -1,10 +1,12 @@
 /// Standard and secure key-value storage for Flutter, on every platform,
-/// with typed JSON helpers and a stream of each key's values.
+/// with typed JSON helpers, a stream of each key's values and a stream of
+/// every change.
 ///
 /// ```dart
 /// final JustStandardStorage storage = await JustStorage.standard();
 /// await storage.write('theme', 'dark');
 /// storage.watch('theme').listen((v) => print('theme: $v'));
+/// storage.changes.listen((change) => print(change));
 ///
 /// final JustSecureStorage secure = await JustStorage.encrypted();
 /// await secure.write('access_token', token);

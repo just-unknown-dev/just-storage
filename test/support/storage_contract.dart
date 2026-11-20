@@ -227,6 +227,64 @@ void storageContract(StorageFactory Function() factory) {
       expect(seen, [null]);
     });
   });
+
+  group('changes', () {
+    test('reports writes, deletes and clears, in order', () async {
+      final s = await open();
+      final seen = <StorageChange>[];
+      final sub = s.changes.listen(seen.add);
+      await s.write('a', '1');
+      await s.write('b', '');
+      await s.delete('a');
+      await s.clear();
+      await pumpEventQueue();
+      await sub.cancel();
+      expect(seen, [
+        const StorageChange('a', '1'),
+        const StorageChange('b', ''),
+        const StorageChange('a', null),
+        const StorageChange.cleared(),
+      ]);
+      expect(seen[1].isDelete, isFalse, reason: 'an empty value is a value');
+      expect(seen[2].isDelete, isTrue);
+      expect(seen[3].isClear, isTrue);
+    });
+
+    test('is broadcast, and starts with nothing', () async {
+      final s = await open();
+      await s.write('before', 'x');
+      final stream = s.changes;
+      final first = <StorageChange>[];
+      final second = <StorageChange>[];
+      final sub1 = stream.listen(first.add);
+      final sub2 = stream.listen(second.add);
+      await s.write('k', 'v');
+      await pumpEventQueue();
+      await sub1.cancel();
+      await sub2.cancel();
+      expect(stream.isBroadcast, isTrue);
+      expect(first, [const StorageChange('k', 'v')]);
+      expect(second, first);
+    });
+
+    test('a cancelled listener hears nothing more', () async {
+      final s = await open();
+      final seen = <StorageChange>[];
+      final sub = s.changes.listen(seen.add);
+      await sub.cancel();
+      await s.write('k', 'v');
+      await pumpEventQueue();
+      expect(seen, isEmpty);
+    });
+
+    test('names the key, never the value', () {
+      expect(
+        const StorageChange('token', 'secret').toString(),
+        isNot(contains('secret')),
+      );
+      expect(const StorageChange('token', null).toString(), contains('token'));
+    });
+  });
 }
 
 /// Completes once [stream] has ended.

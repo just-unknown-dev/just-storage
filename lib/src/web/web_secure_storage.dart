@@ -51,6 +51,9 @@ class WebSecureStorage extends JustSecureStorage {
 
   final WebKeyStore _keys = WebKeyStore();
   final ValueWatchers _watchers = ValueWatchers();
+  late final ChangeListeners _changeListeners = ChangeListeners(
+    onListen: _listenToOtherTabs,
+  );
 
   Map<String, String>? _cache;
   Future<void>? _loading;
@@ -113,6 +116,7 @@ class WebSecureStorage extends JustSecureStorage {
       _cache?[key] = value;
     });
     _watchers.changed(key, value);
+    _changeListeners.add(StorageChange(key, value));
   }
 
   @override
@@ -131,6 +135,7 @@ class WebSecureStorage extends JustSecureStorage {
       _cache?.remove(key);
     });
     _watchers.changed(key, null);
+    _changeListeners.add(StorageChange(key, null));
   }
 
   /// Removes every value. Values that can't be decrypted are removed too,
@@ -148,10 +153,13 @@ class WebSecureStorage extends JustSecureStorage {
     return _watchers.watch(key, load: _entries, now: () => _cache?[key]);
   }
 
+  @override
+  Stream<StorageChange> get changes => _changeListeners.stream;
+
   /// Waits for the writes, deletes and clears called so far, then ends
-  /// every [watch] stream, stops listening to other tabs, and lets go of the
-  /// values in memory. The storage still works afterwards: the next call
-  /// reads them again.
+  /// every [watch] and [changes] stream, stops listening to other tabs, and
+  /// lets go of the values in memory. The storage still works afterwards:
+  /// the next call reads them again.
   Future<void> dispose() async {
     // What starts while waiting is waited for too.
     while (true) {
@@ -166,6 +174,7 @@ class WebSecureStorage extends JustSecureStorage {
     await _otherTabs?.cancel();
     _otherTabs = null;
     _watchers.closeAll();
+    _changeListeners.closeAll();
     _cache = null;
     _loading = null;
     _key = null;
@@ -295,6 +304,7 @@ class WebSecureStorage extends JustSecureStorage {
     for (final key in {...cleared, ..._watchers.keys}) {
       _watchers.changed(key, null);
     }
+    _changeListeners.add(const StorageChange.cleared());
   }
 
   static Future<String> _seal(
@@ -377,6 +387,7 @@ class WebSecureStorage extends JustSecureStorage {
         if (raw == null) {
           cache.remove(key);
           _watchers.changed(key, null);
+          _changeListeners.add(StorageChange(key, null));
           return;
         }
         try {
@@ -385,6 +396,7 @@ class WebSecureStorage extends JustSecureStorage {
           final (:value, version: _) = await _open(cryptoKey, key, raw);
           cache[key] = value;
           _watchers.changed(key, value);
+          _changeListeners.add(StorageChange(key, value));
         } catch (_) {
           // Not readable here: keep this tab's copy.
         }
@@ -404,5 +416,6 @@ class WebSecureStorage extends JustSecureStorage {
     for (final key in {...?before?.keys, ..._watchers.keys}) {
       _watchers.changed(key, _cache?[key]);
     }
+    _changeListeners.add(const StorageChange.cleared());
   }
 }

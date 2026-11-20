@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'just_secure_storage.dart';
 import 'just_standard_storage.dart';
+import 'storage_change.dart';
 import 'storage_exception.dart';
 
 /// What [JustStandardStorage] and [JustSecureStorage] have in common: a
@@ -102,4 +103,19 @@ abstract class JustKeyValueStorage {
   /// a listener gets the [StorageException] in place of the first value, and
   /// the values that follow once it can.
   Stream<String?> watch(String key);
+
+  /// Every change to this storage from now on: a [StorageChange] for each
+  /// key written or deleted, and [StorageChange.cleared] when every key is
+  /// removed at once.
+  ///
+  /// A change is reported once it is saved, so a write that fails reports
+  /// nothing. Changes made elsewhere are reported where the platform tells:
+  /// on the web, those of another tab of the page. On native platforms a
+  /// file changed by another process is not.
+  ///
+  /// Use it to follow a whole storage, where [watch] follows one key. It is
+  /// a broadcast stream: listen as often as you like. Changes arrive
+  /// asynchronously, in the order they were made, and the stream ends only
+  /// when the storage is disposed.
+  Stream<StorageChange> get changes;
 }

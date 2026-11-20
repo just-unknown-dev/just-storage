@@ -23,8 +23,9 @@ No storage wrappers (`shared_preferences`, `flutter_secure_storage`, …): on An
 | **Crash-safe saves** | ✅ native: temporary file renamed over the old one | ✅ native: the same |
 | **Typed JSON helpers** | ✅ | ✅ |
 | **`watch()` stream per key** | ✅ broadcast | ✅ broadcast |
+| **`changes` stream of the whole storage** | ✅ broadcast | ✅ broadcast |
 | **Changes from other tabs (web)** | ✅ | ✅ |
-| **Admin screen** | ✅ `package:just_storage/ui.dart` | ✅ values hidden until shown |
+| **Admin screen** | ✅ `package:just_storage/ui.dart`, desktop and phone | ✅ values hidden until shown |
 
 ### When to choose just_storage
 
@@ -116,6 +117,11 @@ final profile = await storage.readJson('profile', Profile.fromJson);
 // The current value, then every change; listen as often as you like.
 storage.watch('theme').listen((value) => print('theme: $value'));
 
+// Every change to the whole storage: writes, deletes and clears.
+storage.changes.listen((change) {
+  print(change.isClear ? 'all removed' : '${change.key}: ${change.value}');
+});
+
 final all = await storage.readAll();
 await storage.delete('theme');
 await storage.clear();
@@ -164,7 +170,7 @@ try {
 
 ## Admin screen
 
-`package:just_storage/ui.dart` has a screen for looking at and editing storage while the app runs:
+`package:just_storage/ui.dart` has a workbench for looking at and editing storage while the app runs:
 
 ```dart
 import 'package:just_storage/ui.dart';
@@ -172,22 +178,34 @@ import 'package:just_storage/ui.dart';
 Navigator.of(context).push(MaterialPageRoute<void>(
   builder: (_) => const JustStorageAdminScreen(),
 ));
+```
 
-// Your own storages, a theme of its own:
+It shows `JustStorage.standard()` and `JustStorage.encrypted()` unless you pass the storages to show, your own among them:
+
+```dart
 JustStorageAdminScreen(
-  standard: myStandardStorage,
-  secure: mySecureStorage,
+  stores: [
+    StorageAdminStore.standard(),
+    StorageAdminStore.secure(),
+    StorageAdminStore('Game saves', savesStorage, description: 'One per slot'),
+  ],
+  readOnly: true, // look, search, copy and export; change nothing
   theme: ThemeData(colorSchemeSeed: Colors.teal),
 )
 ```
 
-| Tab | What it does |
-|-----|-------------|
-| **Standard** | Search, add, edit, copy and delete the plain values |
-| **Secure** | The same for the encrypted values, hidden until you show them |
-| **Info** | Counts, where the values are kept, and clearing a storage — one that can't be read, too |
+On a wide screen (840 px or more) a sidebar lists the storages beside the selected one's entries, with the selected value in a panel next to them; on a phone the same pieces are pages you drill into.
 
-It can show secure values in plain text: keep it out of release builds, or behind your own developer switch.
+| | What it does |
+|-----|-------------|
+| **Entries** | Search keys (and values, when shown), sort by key, size or latest change, a type badge on each value. Check several to export or delete them at once; right-click (long-press on a phone) for more |
+| **Values** | Text, formatted JSON or a JSON tree; edit in place with JSON checked as you type (Ctrl+S saves); rename, duplicate, copy, delete. A warning when the value changes while you edit it |
+| **Live** | Follows each storage's `changes`: what the app writes shows up at once, marked for a moment |
+| **Secure values** | Hidden until you show them; hidden values are not searched |
+| **Export / import** | JSON you copy or save as a file (the Downloads folder, or a browser download), and import by pasting, picking a file or reading a path: merge, only new keys, or replace all |
+| **Details** | Counts, sizes and value types; the file, folder, key file, or browser storage behind each storage; clear, and wipe (destroying the key) for secure storages |
+
+Pass a `StorageAdminController` to share the screen's state or drive it from code. The screen can show and export secure values in plain text: keep it out of release builds, or behind your own developer switch, and use `readOnly: true` where it must not change anything.
 
 ---
 

@@ -174,6 +174,19 @@ void main() {
         expect(seen, ['old']);
       });
 
+      test('is not reported as a change', () async {
+        final s = await failing();
+        final seen = <StorageChange>[];
+        final sub = s.changes.listen(seen.add);
+        await expectLater(
+          s.write('kept', 'new'),
+          throwsA(isA<StorageException>()),
+        );
+        await pumpEventQueue();
+        await sub.cancel();
+        expect(seen, isEmpty);
+      });
+
       test('leaves no temporary file behind', () async {
         final s = await failing();
         await expectLater(s.write('k', 'v'), throwsA(isA<StorageException>()));
@@ -210,6 +223,30 @@ void main() {
         await pumpEventQueue();
         await s.dispose();
         await done.timeout(const Duration(seconds: 5));
+      });
+
+      test('ends the changes streams; a new one hears what follows', () async {
+        final s = FileStorage(_tempDir());
+        final done = doneOf(s.changes);
+        await s.dispose();
+        await done.timeout(const Duration(seconds: 5));
+        final seen = <StorageChange>[];
+        final sub = s.changes.listen(seen.add);
+        await s.write('k', 'v');
+        await pumpEventQueue();
+        await sub.cancel();
+        expect(seen, [const StorageChange('k', 'v')]);
+      });
+
+      test('a write of the value already saved is no change', () async {
+        final s = FileStorage(_tempDir());
+        await s.write('k', 'v');
+        final seen = <StorageChange>[];
+        final sub = s.changes.listen(seen.add);
+        await s.write('k', 'v');
+        await pumpEventQueue();
+        await sub.cancel();
+        expect(seen, isEmpty);
       });
 
       test('leaves a storage that still works', () async {

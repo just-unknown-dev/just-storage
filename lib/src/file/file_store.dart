@@ -63,6 +63,7 @@ final class FileStore {
   );
 
   final ValueWatchers _watchers = ValueWatchers();
+  final ChangeListeners _changeListeners = ChangeListeners();
 
   /// The entries as callers see them: every write so far, saved or not.
   Map<String, String>? _cache;
@@ -167,6 +168,7 @@ final class FileStore {
     entries[key] = value;
     await _saveAs('Could not save "$key"');
     _watchers.changed(key, value);
+    _changeListeners.add(StorageChange(key, value));
   }
 
   /// Removes [key] and saves.
@@ -182,6 +184,7 @@ final class FileStore {
     entries.remove(key);
     await _saveAs('Could not delete "$key"');
     _watchers.changed(key, null);
+    _changeListeners.add(StorageChange(key, null));
   }
 
   /// Removes every entry and saves an empty store — over a file that can't
@@ -218,11 +221,15 @@ final class FileStore {
     for (final key in cleared) {
       _watchers.changed(key, null);
     }
+    _changeListeners.add(const StorageChange.cleared());
   }
 
   /// The values of [key], as [JustKeyValueStorage.watch] describes.
   Stream<String?> watch(String key) =>
       _watchers.watch(key, load: _entries, now: () => _cache?[key]);
+
+  /// Every saved change, as [JustKeyValueStorage.changes] describes.
+  Stream<StorageChange> get changes => _changeListeners.stream;
 
   /// Waits for the writes, deletes and clears called so far and their
   /// saves, then ends every watch stream and forgets the entries; the next
@@ -239,6 +246,7 @@ final class FileStore {
       if (_changes.isEmpty && identical(saves, _saves)) break;
     }
     _watchers.closeAll();
+    _changeListeners.closeAll();
     _cache = null;
     _onDisk = const {};
     _loading = null;
