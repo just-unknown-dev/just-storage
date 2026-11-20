@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_storage/just_storage.dart';
 import 'package:just_storage/src/ui/admin_utils.dart';
@@ -181,6 +182,24 @@ void main() {
   test('wipe is offered only where the storage can be wiped', () {
     expect(controller.canWipe(store), isFalse);
     expect(controller.wipe(store), throwsA(isA<StateError>()));
+  });
+
+  test('the appearance is dark unless given, and a change notifies', () {
+    expect(controller.themeMode, ThemeMode.dark);
+    var notified = 0;
+    controller.addListener(() => notified++);
+    controller
+      ..setThemeMode(ThemeMode.light)
+      ..setThemeMode(ThemeMode.light);
+    expect(controller.themeMode, ThemeMode.light);
+    expect(notified, 1);
+
+    final system = StorageAdminController(
+      stores: [store],
+      themeMode: ThemeMode.system,
+    );
+    addTearDown(system.dispose);
+    expect(system.themeMode, ThemeMode.system);
   });
 }
 

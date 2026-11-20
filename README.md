@@ -196,6 +196,10 @@ JustStorageAdminScreen(
 
 On a wide screen (840 px or more) a sidebar lists the storages beside the selected one's entries, with the selected value in a panel next to them; on a phone the same pieces are pages you drill into.
 
+![The workbench on a desktop, in its dark default with coral accents: the sidebar lists the Standard, Secure and Game saves storages; Standard's entries each have a type badge, last_played is marked as just written, and the player entry is open as a JSON tree in the value panel](assets/screenshots/workbench_desktop.png)
+
+![The workbench on phones, in dark: the list of storages; the entries of Game saves; the slot_1 save as a JSON tree](assets/screenshots/workbench_phone.png)
+
 | | What it does |
 |-----|-------------|
 | **Entries** | Search keys (and values, when shown), sort by key, size or latest change, a type badge on each value. Check several to export or delete them at once; right-click (long-press on a phone) for more |
@@ -204,6 +208,10 @@ On a wide screen (840 px or more) a sidebar lists the storages beside the select
 | **Secure values** | Hidden until you show them; hidden values are not searched |
 | **Export / import** | JSON you copy or save as a file (the Downloads folder, or a browser download), and import by pasting, picking a file or reading a path: merge, only new keys, or replace all |
 | **Details** | Counts, sizes and value types; the file, folder, key file, or browser storage behind each storage; clear, and wipe (destroying the key) for secure storages |
+
+It has its own look, the same as just_database's workbench: black and grey with coral accents, dark by default, in the app's font. The sun and moon button in the app bar switches to light; `StorageAdminController(themeMode: ThemeMode.system)` follows the device instead. Pass `theme:` for your own colours; in the other brightness a theme is made from its primary colour.
+
+![The workbench in light mode: the Secure storage with its values shown, and the account entry being edited as formatted JSON](assets/screenshots/workbench_desktop_light.png)
 
 Pass a `StorageAdminController` to share the screen's state or drive it from code. The screen can show and export secure values in plain text: keep it out of release builds, or behind your own developer switch, and use `readOnly: true` where it must not change anything.
 

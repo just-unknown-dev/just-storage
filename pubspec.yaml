@@ -10,6 +10,14 @@ topics:
   - key-value
   - persistence
 
+screenshots:
+  - description: "The storage workbench on a desktop, dark with coral accents: storages in the sidebar, entries, and a JSON value as a tree."
+    path: assets/screenshots/workbench_desktop.png
+  - description: "The storage workbench on phones: the storages, a storage's entries, and a save slot as a JSON tree."
+    path: assets/screenshots/workbench_phone.png
+  - description: "The storage workbench in light mode: a secure storage with its values shown, and one being edited as JSON."
+    path: assets/screenshots/workbench_desktop_light.png
+
 environment:
   sdk: ^3.11.0
   flutter: ">=3.47.1"

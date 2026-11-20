@@ -26,6 +26,7 @@ example/.dart_tool/
 
 # Local development
 /pubspec.lock
+/devtools_options.yaml
 pubspec_overrides.yaml
 example/pubspec.lock
 

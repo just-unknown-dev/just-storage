@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'admin_style.dart';
+import 'admin_theme.dart';
 import 'shell/compact_pages.dart';
 import 'shell/store_sidebar.dart';
 import 'shell/store_workspace.dart';
@@ -42,6 +43,11 @@ import 'widgets/admin_widgets.dart';
 /// Secure values are hidden until shown, but the screen can show them and
 /// export them decrypted: keep it out of release builds, or pass
 /// `readOnly: true` for a screen that can't change anything.
+///
+/// It has its own look, black and grey with coral accents, in the app's
+/// font. It is dark until the user picks light with the app bar's button
+/// (see [StorageAdminController.themeMode]). Give it a [theme] for other
+/// colours.
 class JustStorageAdminScreen extends StatefulWidget {
   /// The screen over [stores], or over [controller].
   const JustStorageAdminScreen({
@@ -65,8 +71,10 @@ class JustStorageAdminScreen extends StatefulWidget {
   /// [controller] has its own setting).
   final bool readOnly;
 
-  /// A theme for the screen and the pages and dialogs it opens; the app's
-  /// theme when null.
+  /// Colours of your own for the screen and the pages and dialogs it opens,
+  /// instead of its black, grey and coral. It is used as it is in its own
+  /// brightness; in the other one (see [StorageAdminController.themeMode])
+  /// a theme is made from its primary colour.
   final ThemeData? theme;
 
   /// The app bar's title.
@@ -130,7 +138,7 @@ class _JustStorageAdminScreenState extends State<JustStorageAdminScreen> {
     super.dispose();
   }
 
-  List<Widget> _actions() => [
+  List<Widget> _actions(BuildContext context) => [
     if (_controller.isBusy)
       const Padding(
         padding: EdgeInsets.symmetric(horizontal: 14),
@@ -149,7 +157,19 @@ class _JustStorageAdminScreenState extends State<JustStorageAdminScreen> {
         tooltip: 'Read every storage again (F5)',
         onPressed: _controller.refresh,
       ),
+    _themeToggle(context),
   ];
+
+  Widget _themeToggle(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return IconButton(
+      key: const ValueKey('jst-theme-toggle'),
+      icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+      tooltip: dark ? 'Light mode' : 'Dark mode',
+      onPressed: () =>
+          _controller.setThemeMode(dark ? ThemeMode.light : ThemeMode.dark),
+    );
+  }
 
   Widget _title(BuildContext context) => Row(
     children: [
@@ -183,14 +203,17 @@ class _JustStorageAdminScreenState extends State<JustStorageAdminScreen> {
         );
       },
     );
-    final theme = widget.theme;
-    return theme == null ? screen : Theme(data: theme, child: screen);
+    return AdminTheme(
+      controller: _controller,
+      theme: widget.theme,
+      child: screen,
+    );
   }
 
   Widget _wide(BuildContext context, double width) {
     final sidebar = _sidebarWidth.clamp(200.0, width * 0.4);
     return Scaffold(
-      appBar: AppBar(title: _title(context), actions: _actions()),
+      appBar: AppBar(title: _title(context), actions: _actions(context)),
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -219,7 +242,7 @@ class _JustStorageAdminScreenState extends State<JustStorageAdminScreen> {
 
   Widget _compact(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: _title(context), actions: _actions()),
+      appBar: AppBar(title: _title(context), actions: _actions(context)),
       body: SafeArea(child: CompactStoreList(controller: _controller)),
     );
   }

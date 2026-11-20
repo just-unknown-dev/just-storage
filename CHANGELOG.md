@@ -1,4 +1,4 @@
-## [2.0.0] - Unreleased
+## [2.0.0] - 2026-11-20
 
 An audit of the whole package: data that could be lost or overwritten without a word now isn't, the encrypted format binds each value to its key, the web key can no longer be read by scripts, and the code is laid out by feature. Every storage reports its changes as a stream, and the admin screen is rebuilt as a workbench for desktop and phones. Requires Dart ^3.11.0 and Flutter >=3.47.1.
 
@@ -32,6 +32,7 @@ An audit of the whole package: data that could be lost or overwritten without a 
   - **Export and import**: JSON with the storage's name, to copy or save (a `just_storage` folder in Downloads, or a browser download); secure exports warn that values come out decrypted and preview them masked. Import pastes, picks a file (web), reads a path (desktop) or an earlier export; previews what is new and what exists; merges, adds only new keys, or replaces all.
   - **Details**: entries, sizes, largest value and value types; where the values are — folder, file, key file, or the browser origin, prefix and key — with paths to copy; what protects them; clear, and wipe (destroying the key) for secure storages, each confirmed by typing the storage's name.
   - **`readOnly: true`**: looking, searching, copying and exporting only.
+  - **Its own look**, the same as just_database's workbench: black and grey with coral accents, dark by default, in the app's font. The app bar's sun and moon button switches to light; `StorageAdminController(themeMode:)` sets the first appearance (`ThemeMode.system` follows the device), and `theme:` gives colours of your own, remade in the other brightness from its primary colour.
 - **The workbench in Flutter DevTools**: in debug builds the same workbench runs as the **just_storage** tab of Flutter DevTools, on the storages of the running app, with a link to it in the console when the first storage opens. It shows the storages `JustStorage.standard()` and `JustStorage.encrypted()` opened, and any given to `JustStorage.debugShowInDevTools(name, storage)`; it follows the app's changes, gathered into a few updates a second, and sends nothing while no workbench is connected. `JustStorage.debugDevToolsWorkbench = false` turns it off. Release and profile builds don't have it.
 
 ### Changed

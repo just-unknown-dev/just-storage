@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 
 import '../core/core.dart';
 import '../file/file.dart' if (dart.library.js_interop) '../web/web.dart';
@@ -70,11 +71,14 @@ final class StorageAdminStore {
 /// [StateError] when [readOnly].
 class StorageAdminController extends ChangeNotifier {
   /// A controller over [stores] — by default the app's standard and secure
-  /// storages. With [readOnly] nothing can be changed through it.
+  /// storages. With [readOnly] nothing can be changed through it;
+  /// [themeMode] is the screen's first appearance (dark unless given).
   StorageAdminController({
     List<StorageAdminStore>? stores,
     this.readOnly = false,
-  }) : _stores = List.unmodifiable(
+    ThemeMode themeMode = ThemeMode.dark,
+  }) : _themeMode = themeMode,
+       _stores = List.unmodifiable(
          stores ?? [StorageAdminStore.standard(), StorageAdminStore.secure()],
        ) {
     _checkNames(_stores);
@@ -104,6 +108,20 @@ class StorageAdminController extends ChangeNotifier {
   /// Whether nothing can be changed: no writing, deleting, clearing or
   /// importing. Looking, searching, copying and exporting still work.
   final bool readOnly;
+
+  /// Whether the screen is dark ([ThemeMode.dark], the default), light
+  /// ([ThemeMode.light]), or follows the device ([ThemeMode.system]). The
+  /// app bar's button switches between dark and light; the choice lasts as
+  /// long as the controller.
+  ThemeMode get themeMode => _themeMode;
+  ThemeMode _themeMode;
+
+  /// Sets [themeMode].
+  void setThemeMode(ThemeMode mode) {
+    if (mode == _themeMode) return;
+    _themeMode = mode;
+    _notify();
+  }
 
   final Map<StorageAdminStore, _StoreState> _states = {};
 

@@ -36,6 +36,7 @@ void main() {
     Size size = _wide,
     bool readOnly = false,
     StorageAdminController? controller,
+    ThemeData? theme,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -54,6 +55,7 @@ void main() {
         home: JustStorageAdminScreen(
           controller: controller,
           readOnly: readOnly,
+          theme: theme,
           stores: [
             adminStore('Standard', standard),
             adminStore('Secure', secure),
@@ -510,6 +512,81 @@ void main() {
             .data,
         'Secure',
       );
+    });
+  });
+
+  group('appearance', () {
+    ThemeData themeAt(WidgetTester tester, Finder finder) =>
+        Theme.of(tester.element(finder));
+
+    StorageAdminController controllerFor({
+      ThemeMode themeMode = ThemeMode.dark,
+    }) {
+      final controller = StorageAdminController(
+        stores: [
+          adminStore('Standard', standard),
+          adminStore('Secure', secure),
+        ],
+        themeMode: themeMode,
+      );
+      addTearDown(controller.dispose);
+      return controller;
+    }
+
+    testWidgets('dark with coral by default; the button switches to light', (
+      tester,
+    ) async {
+      final controller = controllerFor();
+      await show(tester, controller: controller);
+      var theme = themeAt(tester, row('theme'));
+      expect(theme.brightness, Brightness.dark);
+      expect(theme.colorScheme.primary, const Color(0xFFF5746F));
+
+      await tapKey(tester, 'jst-theme-toggle');
+      theme = themeAt(tester, row('theme'));
+      expect(controller.themeMode, ThemeMode.light);
+      expect(theme.brightness, Brightness.light);
+      expect(find.byIcon(Icons.dark_mode_outlined), findsOneWidget);
+
+      await tapKey(tester, 'jst-theme-toggle');
+      expect(controller.themeMode, ThemeMode.dark);
+      expect(themeAt(tester, row('theme')).brightness, Brightness.dark);
+    });
+
+    testWidgets('follows the device when asked to', (tester) async {
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+      await show(
+        tester,
+        controller: controllerFor(themeMode: ThemeMode.system),
+      );
+      expect(themeAt(tester, row('theme')).brightness, Brightness.light);
+    });
+
+    testWidgets('a given theme is used in its brightness, remade in the '
+        'other', (tester) async {
+      final given = ThemeData(colorSchemeSeed: const Color(0xFF00897B));
+      final controller = controllerFor(themeMode: ThemeMode.light);
+      await show(tester, controller: controller, theme: given);
+      expect(themeAt(tester, row('theme')).colorScheme, given.colorScheme);
+
+      controller.setThemeMode(ThemeMode.dark);
+      await tester.pumpAndSettle();
+      final dark = themeAt(tester, row('theme')).colorScheme;
+      expect(dark.brightness, Brightness.dark);
+      expect(dark.primary, isNot(const Color(0xFFF5746F)));
+      expect(dark, isNot(given.colorScheme));
+    });
+
+    testWidgets('pages pushed on a phone follow a change', (tester) async {
+      final controller = controllerFor();
+      await show(tester, size: _phone, controller: controller);
+      await openStore(tester, 'Standard');
+      expect(themeAt(tester, row('theme')).brightness, Brightness.dark);
+
+      controller.setThemeMode(ThemeMode.light);
+      await tester.pumpAndSettle();
+      expect(themeAt(tester, row('theme')).brightness, Brightness.light);
     });
   });
 
