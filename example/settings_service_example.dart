@@ -27,13 +27,14 @@ class AppSettings {
   });
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
-        theme: ChessTheme.values.byName(json['theme'] as String? ?? 'system'),
-        boardStyle: BoardStyle.values
-            .byName(json['boardStyle'] as String? ?? 'classic'),
-        soundEnabled: json['soundEnabled'] as bool? ?? true,
-        moveAnimationMs: json['moveAnimationMs'] as int? ?? 200,
-        showCoordinates: json['showCoordinates'] as bool? ?? true,
-      );
+    theme: ChessTheme.values.byName(json['theme'] as String? ?? 'system'),
+    boardStyle: BoardStyle.values.byName(
+      json['boardStyle'] as String? ?? 'classic',
+    ),
+    soundEnabled: json['soundEnabled'] as bool? ?? true,
+    moveAnimationMs: json['moveAnimationMs'] as int? ?? 200,
+    showCoordinates: json['showCoordinates'] as bool? ?? true,
+  );
 
   static const AppSettings defaults = AppSettings();
 
@@ -44,12 +45,12 @@ class AppSettings {
   final bool showCoordinates;
 
   Map<String, dynamic> toJson() => {
-        'theme': theme.name,
-        'boardStyle': boardStyle.name,
-        'soundEnabled': soundEnabled,
-        'moveAnimationMs': moveAnimationMs,
-        'showCoordinates': showCoordinates,
-      };
+    'theme': theme.name,
+    'boardStyle': boardStyle.name,
+    'soundEnabled': soundEnabled,
+    'moveAnimationMs': moveAnimationMs,
+    'showCoordinates': showCoordinates,
+  };
 
   AppSettings copyWith({
     ChessTheme? theme,
@@ -57,14 +58,13 @@ class AppSettings {
     bool? soundEnabled,
     int? moveAnimationMs,
     bool? showCoordinates,
-  }) =>
-      AppSettings(
-        theme: theme ?? this.theme,
-        boardStyle: boardStyle ?? this.boardStyle,
-        soundEnabled: soundEnabled ?? this.soundEnabled,
-        moveAnimationMs: moveAnimationMs ?? this.moveAnimationMs,
-        showCoordinates: showCoordinates ?? this.showCoordinates,
-      );
+  }) => AppSettings(
+    theme: theme ?? this.theme,
+    boardStyle: boardStyle ?? this.boardStyle,
+    soundEnabled: soundEnabled ?? this.soundEnabled,
+    moveAnimationMs: moveAnimationMs ?? this.moveAnimationMs,
+    showCoordinates: showCoordinates ?? this.showCoordinates,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -121,18 +121,16 @@ class SettingsService {
 
   /// Stream of [AppSettings] — emits the current value immediately on
   /// subscription, then again whenever [save] / [update] is called.
-  Stream<AppSettings> watchSettings() => _storage.watch(_key).map(
-        (raw) {
-          if (raw == null) return AppSettings.defaults;
-          try {
-            return AppSettings.fromJson(
-              Map<String, dynamic>.from(jsonDecode(raw) as Map),
-            );
-          } on FormatException {
-            return AppSettings.defaults;
-          }
-        },
+  Stream<AppSettings> watchSettings() => _storage.watch(_key).map((raw) {
+    if (raw == null) return AppSettings.defaults;
+    try {
+      return AppSettings.fromJson(
+        Map<String, dynamic>.from(jsonDecode(raw) as Map),
       );
+    } on FormatException {
+      return AppSettings.defaults;
+    }
+  });
 
   // --------------------------------------------------------------------------
   // Reset

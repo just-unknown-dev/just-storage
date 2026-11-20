@@ -1,4 +1,12 @@
+analyzer:
+  exclude:
+    - build/**
+    # The DevTools extension is an app of its own (and its build output).
+    - devtools_extension/**
+    - extension/**
 include: package:flutter_lints/flutter.yaml
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+linter:
+  rules:
+    # Every exported name says what it is for.
+    - public_member_api_docs
